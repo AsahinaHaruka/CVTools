@@ -275,8 +275,8 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="ONNX FP16 Inference Script for a folder of images.")
     parser.add_argument('--model', type=str, required=True, help="Path to the half-precision ONNX model file.")
-    parser.add_argument('--input', type=str, required=True, help="Path to the folder containing input images.")
-    parser.add_argument('--output', type=str, required=True, help="Path to the folder where results will be saved.")
+    parser.add_argument('-i', '--input', type=str, required=True, help="Path to the folder containing input images.")
+    parser.add_argument('-o', '--output', type=str, required=True, help="Path to the folder where results will be saved.")
 
     args = parser.parse_args()
     main(args)

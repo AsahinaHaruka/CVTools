@@ -9,6 +9,7 @@
 * [color_to_gray.py](color_to_gray.py): 将彩色图像转换为灰度图。
 * [random_selection.py](random_selection.py): 从目录中随机选择一部分文件。
 * [perspective_transformation.py](perspective_transformation.py): 对图像进行透视变换的类。
+* [data_split.py](data_split.py): 随机拆分训练集测试集。
 
 ## 安装与使用
 

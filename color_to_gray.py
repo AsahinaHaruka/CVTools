@@ -17,8 +17,8 @@ IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"}
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="批量将彩色图片转为灰度（OpenCV）")
-    p.add_argument("--src", help="输入目录路径")
-    p.add_argument("--dst", help="输出目录路径")
+    p.add_argument('-i', '--input', help="输入目录路径")
+    p.add_argument('-o', '--output', help="输出目录路径")
     p.add_argument("--recursive", action="store_true", help="递归处理子目录")
     p.add_argument("--overwrite", action="store_true", help="若输出已存在则覆盖")
     return p.parse_args()
@@ -81,8 +81,8 @@ def to_gray(in_path: Path, out_path: Path, overwrite: bool) -> bool:
 
 def main() -> None:
     args = parse_args()
-    src = Path(args.src)
-    dst = Path(args.dst)
+    src = Path(args.input)
+    dst = Path(args.output)
 
     if not src.exists() or not src.is_dir():
         print(f"[错误] 输入目录不存在或不可用: {src}", file=sys.stderr)

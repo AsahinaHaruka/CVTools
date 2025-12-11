@@ -245,9 +245,9 @@ def process_videos(video_dir: str, output_dir: str, enable_perspective: bool = F
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Extract 1 FPS frames, optional perspective warp.")
-    parser.add_argument("--video-dir", type=str, required=True,
+    parser.add_argument('-i', '--input', type=str, required=True,
                         help="包含视频的目录路径")
-    parser.add_argument("--output-dir", type=str, required=True,
+    parser.add_argument('-o', '--output', type=str, required=True,
                         help="保存帧图像的目录路径")
     parser.add_argument("--perspective", action="store_true",
                         default=False,
@@ -269,7 +269,7 @@ if __name__ == "__main__":
         if any('\u4e00' <= ch <= '\u9fff' for ch in args.output_dir):
             sys.stderr.write('⚠️ 警告：输出目录包含中文，建议使用英文路径\n')
 
-    process_videos(args.video_dir, args.output_dir,
+    process_videos(args.input, args.output,
                    enable_perspective=args.perspective,
                    output_size=tuple(args.output_size) if args.output_size else None)
 
