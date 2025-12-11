@@ -19,6 +19,9 @@ from perspective_transformation import PerspectiveTransformer
 
 video_extensions = {'.mp4', '.mov', '.avi', '.mkv', '.flv', '.wmv', '.webm', '.dav'}
 
+# 容错阈值：允许连续由多少帧读取失败（监控视频坏帧常见，建议设大一点，比如100）
+MAX_TOLERANCE = 100
+
 
 def pool_init(lock):
     """
@@ -78,12 +81,12 @@ def prepare_perspective_for_video(video_path: str, cache: dict,
     frame0 = get_first_frame(video_path)
     if frame0 is None:
         # 使用 tqdm.write 避免打断进度条
-        tqdm.write(f"[WARN] 无法读取首帧: {video_path}")
+        tqdm.write(f"⚠️ 无法读取首帧: {video_path}")
         return None
 
     pts = select_four_points(frame0, f"Select 4 points - {video_key}")
     if pts is None:
-        tqdm.write(f"[INFO] 跳过视频(未选择点): {video_path}")
+        tqdm.write(f"⚠️ 跳过视频(未选择点): {video_path}")
         return None
 
     transformer = PerspectiveTransformer(points=pts, dst_size=output_size)
@@ -100,7 +103,6 @@ def prepare_perspective_for_video(video_path: str, cache: dict,
 
 def extract_frames(video_path: str, output_dir: str, video_name: str, persp_cfg: dict | None = None,
                    worker_id: int = 0):
-    # 稍微错开启动时间
     time.sleep(worker_id * 0.1)
 
     if not os.path.exists(output_dir):
@@ -108,14 +110,13 @@ def extract_frames(video_path: str, output_dir: str, video_name: str, persp_cfg:
 
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
-        tqdm.write(f"[WARN] 无法打开视频: {video_path}")
+        tqdm.write(f"❌ 无法打开: {video_name}")
         return
 
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     fps_val = cap.get(cv2.CAP_PROP_FPS)
     fps = int(fps_val) if fps_val and fps_val > 0 else 1
 
-    # 使用 PerspectiveTransformer 进行变换
     transformer = None
     if persp_cfg:
         src_points = np.array(persp_cfg["src_points"], dtype=np.float32)
@@ -127,15 +128,32 @@ def extract_frames(video_path: str, output_dir: str, video_name: str, persp_cfg:
             border_mode=cv2.BORDER_REPLICATE
         )
 
+    short_name = os.path.basename(video_path)
+    if len(short_name) > 15:
+        display_name = f"{short_name[:3]}..{short_name[-10:]}"
+    else:
+        display_name = short_name
+
+    desc_str = f"W-{worker_id} {display_name}"
     image_count = 0
-    for i in tqdm(range(frame_count),
-                  desc=f"Proc {os.path.basename(video_path)[:15]}",  # 缩短名字防换行
-                  position=worker_id,
-                  leave=True):
+
+    consecutive_errors = 0  # 当前连续错误计数
+
+    for i in tqdm(range(frame_count), desc=desc_str, position=worker_id, leave=True, mininterval=0.5):
         ret, frame = cap.read()
+
         if not ret:
-            break
-        # 每秒提取一帧
+            consecutive_errors += 1
+            if consecutive_errors > MAX_TOLERANCE:
+                # 连续坏太多帧，判定为视频真正结束
+                tqdm.write(f"❌ {video_name} 结束于帧 {i} (连续错误)")
+                break
+
+            # 只是偶尔坏帧，跳过，不保存图片，继续循环找下一帧
+            continue
+
+        # 如果成功读到帧，重置错误计数器
+        consecutive_errors = 0
         if i % fps != 0:
             continue
 
@@ -199,12 +217,12 @@ def process_videos(video_dir: str, output_dir: str, enable_perspective: bool = F
                 with open(cache_path, "w", encoding="utf-8") as fw:
                     json.dump(points_cache, fw, ensure_ascii=False, indent=2)
             except Exception as e:
-                print(f"[WARN] 写入缓存失败: {e}")
+                print(f"⚠️ 写入缓存失败: {e}")
 
         except Exception as e:
-            print(f"任务处理出错 -> {e}")
+            print(f"❌ 任务处理出错 -> {e}")
 
-        print("\n>>> 所有点选完成，后台处理中... (请勿关闭窗口)\n")
+        print("\n>>>🚀 所有点选完成，后台处理中... (请勿关闭窗口)\n")
         pool.close()
         pool.join()
         print("\n所有处理已完成。")
@@ -243,6 +261,9 @@ def parse_args():
 if __name__ == "__main__":
     multiprocessing.set_start_method("spawn", force=True)
     args = parse_args()
+
+    if args.output_size:
+        args.perspective = True
 
     if os.name == 'nt':
         if any('\u4e00' <= ch <= '\u9fff' for ch in args.output_dir):
