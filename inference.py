@@ -276,23 +276,33 @@ def process_detections(raw_output: np.ndarray, area_bounds: np.ndarray, confiden
     result = np.zeros((num_areas, 5), dtype=np.float32)
     result[:, 4] = -1.0  # 默认类别为-1
 
+    # 遍历每个区域进行处理
     for area_idx in range(num_areas):
         area_mask = in_area_matrix[:, area_idx]
 
         if not np.any(area_mask):
             continue
 
-        area_boxes = all_boxes[area_mask]
-        area_scores = all_scores[area_mask]
-        area_classes = all_classes[area_mask]
+        # 获取该区域内的所有原始数据
+        current_boxes = all_boxes[area_mask]
+        current_scores = all_scores[area_mask]
+        current_classes = all_classes[area_mask]
 
-        # 加权平均计算边界框
-        weights = area_scores / np.sum(area_scores)
-        weighted_box = np.sum(area_boxes * weights[:, np.newaxis], axis=0)
-
-        # 类别投票
-        class_votes = np.bincount(area_classes, weights=area_scores, minlength=class_num)
+        # 类别投票 (确定主导类别)
+        # 使用分数加权投票
+        class_votes = np.bincount(current_classes, weights=current_scores, minlength=class_num)
         final_class = np.argmax(class_votes)
+
+        # 只保留属于主导类别的框
+        target_mask = (current_classes == final_class)
+
+        target_boxes = current_boxes[target_mask]
+        target_scores = current_scores[target_mask]
+
+        # 加权平均
+
+        weights = target_scores / np.sum(target_scores)
+        weighted_box = np.sum(target_boxes * weights[:, np.newaxis], axis=0)
 
         result[area_idx, :4] = weighted_box
         result[area_idx, 4] = float(final_class)
