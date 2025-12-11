@@ -1,0 +1,15 @@
+[project]
+name = "cvtools"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.13"
+dependencies = [
+    "tqdm>=4.67.1",
+    "opencv-python>=4.7.0.72"
+]
+[project.optional-dependencies]
+inference = [
+    "onnx>=1.19.1",
+    "onnxslim>= 0.1.74",
+    "onnxruntime-gpu>=1.23.2",
+]
