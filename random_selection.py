@@ -154,8 +154,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     sample_files_from_directories(
-        Path(args.source),
-        Path(args.dest),
+        Path(args.input),
+        Path(args.output),
         args.num,
         args.model
     )

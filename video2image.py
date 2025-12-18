@@ -266,7 +266,7 @@ if __name__ == "__main__":
         args.perspective = True
 
     if os.name == 'nt':
-        if any('\u4e00' <= ch <= '\u9fff' for ch in args.output_dir):
+        if any('\u4e00' <= ch <= '\u9fff' for ch in args.output):
             sys.stderr.write('⚠️ 警告：输出目录包含中文，建议使用英文路径\n')
 
     process_videos(args.input, args.output,
