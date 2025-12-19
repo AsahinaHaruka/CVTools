@@ -4,6 +4,7 @@
 @Author ：Haruka
 @Date ：2025/8/22 08:58
 """
+import math
 import os
 
 import onnxruntime as ort
@@ -22,52 +23,162 @@ DTYPE_MAPPING = {
     "tensor(int8)": np.int8
 }
 
+
 class BashInference:
-    def __init__(self, model_path: str):
+    def __init__(self,
+                 model_path: str,
+                 enable_trt_profile: bool = False,
+                 max_batch_size: int = 5,
+                 opt_batch_size: int = 5,
+                 input_image_size: tuple[int, int] = None,
+                 target_long_side: int = 640):
         """
         Initialize the ONNX inference session.
         :param model_path: Path to the ONNX model file.
+        :param enable_trt_profile: 是否启用 TensorRT 固定形状优化
+        :param max_batch_size: 预期的最大 Batch Size (仅在 enable_trt_profile=True 且模型输入动态时生效)
+        :param opt_batch_size: 预期的最优 Batch Size (仅在 enable_trt_profile=True 且模型输入动态时生效)
+        :param input_image_size: 摄像头/图片的原始分辨率 (Width, Height)。
+                                 如果传入此参数，会自动计算最佳的矩形输入尺寸 (Rectangular Inference)。
+                                 如果不传，默认使用 target_long_side 的正方形。
+        :param target_long_side: 预期的输入尺寸 (H, W) (仅在 enable_trt_profile=True 且模型输入动态时生效)
         """
-        try:
-            model_name = os.path.splitext(os.path.basename(model_path))[0]
-            cache_dir = f"./trt_cache/{model_name}"
-            os.makedirs(cache_dir, exist_ok=True)
-        except:
-            cache_dir="."
-        providers = [
-            ('TensorrtExecutionProvider', {
+        self.model_path = model_path
+        self.stride = 32
+        self.max_batch_size = max_batch_size
+        self.opt_batch_size = opt_batch_size
+        self.target_long_side = target_long_side
+
+        if enable_trt_profile and input_image_size is not None:
+            self.is_fixed_size = True
+            # 计算最佳固定尺寸 (H, W)
+            self.img_size = self._cal_optimal_fixed_shape(input_image_size, target_long_side, self.stride)
+            print(f"ℹ️ [Init] 模式: TensorRT固定形状优化。锁定引擎尺寸: {self.img_size}")
+
+
+        else:
+            self.is_fixed_size = False
+            # 这里的 img_size 作为正方形托底
+            self.img_size = [target_long_side, target_long_side]
+            mode_str = "TRT动态形状" if enable_trt_profile else "普通推理"
+            print(f"ℹ️ [Init] 模式: {mode_str} (Standard Dynamic Rect)。目标长边: {target_long_side}")
+
+        trt_profile_options = self._analyze_model_and_get_profile(enable_trt_profile)
+
+        if enable_trt_profile:
+            try:
+                model_name = os.path.splitext(os.path.basename(model_path))[0]
+                shape_tag = f"{self.img_size[0]}x{self.img_size[1]}" if self.is_fixed_size else "dynamic"
+                cache_dir = f"./trt_cache/{model_name}_{shape_tag}"
+                os.makedirs(cache_dir, exist_ok=True)
+            except:
+                cache_dir = "."
+
+            trt_provider_options = {
                 'device_id': 0,
-                'trt_max_workspace_size': 4294967296,  # TensorRT最大内存 (4GB)
-                'trt_fp16_enable': True,  # 启用 FP16 加速
-                'trt_engine_cache_enable': True,  # 启用 TensorRT 引擎缓存
-                'trt_engine_cache_path': cache_dir,  # 缓存路径
-            }),
+                'trt_max_workspace_size': 4294967296,  # 4GB
+                'trt_fp16_enable': True,
+                'trt_engine_cache_enable': True,
+                'trt_engine_cache_path': cache_dir,
+            }
+
+            # 如果启用了 Profile 优化，将生成的 shape 配置合并进去
+            if trt_profile_options:
+                print(f"ℹ️ [Init] 设置TensorRT 动态形状优化参数:\n"
+                      f"   Min: {trt_profile_options['trt_profile_min_shapes']}\n"
+                      f"   Opt: {trt_profile_options['trt_profile_opt_shapes']}\n"
+                      f"   Max: {trt_profile_options['trt_profile_max_shapes']}")
+                trt_provider_options.update(trt_profile_options)
+        else:
+            trt_provider_options = {
+                'device_id': 0,
+            }
+
+        providers = [
+            ('TensorrtExecutionProvider', trt_provider_options),
             'CUDAExecutionProvider',
-            'CPUExecutionProvider']
+            'CPUExecutionProvider'
+        ]
+
+        # 3. 创建正式的推理 Session
         session_options = ort.SessionOptions()
         session_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
         session_options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
-        session_options.log_severity_level = 3  # 只输出警告和错误
+        session_options.log_severity_level = 3
 
-        # 创建ONNX Runtime会话
         self.session = ort.InferenceSession(model_path, sess_options=session_options, providers=providers)
-        print(f"ONNX run on {self.session.get_providers()[0]}")
+        print(f"ℹ️ [Init] 模型加载成功! 运行设备: {self.session.get_providers()[0]}")
 
-        # 获取输入输出信息
-        self.input_name = self.session.get_inputs()[0].name
-        self.output_name = self.session.get_outputs()[0].name
+    @staticmethod
+    def _cal_optimal_fixed_shape(input_wh: tuple, target_long: int, stride: int) -> list:
+        """
+        计算最佳的矩形推理尺寸。
+        :return: [Height, Width]
+        """
+        w, h = input_wh
 
-        # 从模型获取输入尺寸信息
-        input_shape = self.session.get_inputs()[0].shape
-        if isinstance(input_shape[2], int) and isinstance(input_shape[3], int):
-            self.img_size = [input_shape[2], input_shape[3]]
-        else:
-            self.img_size = [640, 640]  # 默认尺寸
+        # 矩形推理优化逻辑
+        scale = target_long / max(w, h)
 
-        self.stride = 32  # 默认stride
-        # 动态获取模型输入的数据类型
-        input_type = self.session.get_inputs()[0].type
-        self.dtype = DTYPE_MAPPING.get(input_type, np.float32)
+        # 缩放并向上取整到 stride 的倍数
+        new_h = int(math.ceil(h * scale / stride) * stride)
+        new_w = int(math.ceil(w * scale / stride) * stride)
+
+        return [new_h, new_w]
+
+    def _analyze_model_and_get_profile(self, enable_profile: bool) -> dict:
+        """获取模型输入名、动态Shape信息，并生成 Profile 字符串"""
+        temp_sess = ort.InferenceSession(self.model_path, providers=['CPUExecutionProvider'])
+        input_info = temp_sess.get_inputs()[0]
+        output_info = temp_sess.get_outputs()[0]
+
+        self.input_name = input_info.name
+        self.output_name = output_info.name
+        self.dtype = DTYPE_MAPPING.get(input_info.type, np.float32)
+        model_shape = input_info.shape
+        del temp_sess
+
+        if isinstance(model_shape[2], int) and isinstance(model_shape[3], int):
+            self.img_size = [model_shape[2], model_shape[3]]
+            self.is_fixed_size = True  # 模型本身固定，强制变为固定模式
+            print(f"⚠️ 检测到模型为静态尺寸 {self.img_size}，已强制切换为固定尺寸模式。")
+
+        if not enable_profile: return {}
+
+        min_dims, opt_dims, max_dims = [], [], []
+
+        # 遍历维度生成配置
+        for idx, dim in enumerate(model_shape):
+            if isinstance(dim, int):  # 静态维度
+                min_dims.append(dim)
+                opt_dims.append(dim)
+                max_dims.append(dim)
+            elif isinstance(dim, str):  # 动态维度
+                if idx == 0:  # Batch
+                    min_dims.append(1)
+                    opt_dims.append(self.max_batch_size)
+                    max_dims.append(self.opt_batch_size)
+                elif idx == 2:  # Height
+                    min_dims.append(self.img_size[0])
+                    opt_dims.append(self.img_size[0])
+                    max_dims.append(self.img_size[0])
+                elif idx == 3:  # Width
+                    min_dims.append(self.img_size[1])
+                    opt_dims.append(self.img_size[1])
+                    max_dims.append(self.img_size[1])
+                else:
+                    min_dims.append(1)
+                    opt_dims.append(1)
+                    max_dims.append(1)
+
+        def to_str(dims):
+            return f"{self.input_name}:{'x'.join(map(str, dims))}"
+
+        return {
+            'trt_profile_min_shapes': to_str(min_dims),
+            'trt_profile_opt_shapes': to_str(opt_dims),
+            'trt_profile_max_shapes': to_str(max_dims)
+        }
 
     def __call__(self, input_data: list[np.ndarray], raw=True) -> np.ndarray:
         """
@@ -87,10 +198,25 @@ class BashInference:
     def trans_img(self, img: np.ndarray) -> tuple[np.ndarray, dict]:
         """Resize and pad an image for object detection"""
         shape = img.shape[:2]
-        r = min(self.img_size[0] / shape[0], self.img_size[1] / shape[1])  # 缩放比例
-        new_pad = int(round(shape[1] * r)), int(round(shape[0] * r))  # 缩放后的宽高
-        dw, dh = self.img_size[1] - new_pad[0], self.img_size[0] - new_pad[1]  # 填充量
-        dw, dh = np.mod(dw, self.stride), np.mod(dh, self.stride)
+
+        if self.is_fixed_size:
+            # 强制适配到 self.img_size
+            # 这里的 self.img_size 是初始化时算好的绝对值
+            r = min(self.img_size[0] / shape[0], self.img_size[1] / shape[1])  # 缩放比例
+            new_pad = int(round(shape[1] * r)), int(round(shape[0] * r))  # 缩放后的宽高
+            dw, dh = self.img_size[1] - new_pad[0], self.img_size[0] - new_pad[1]  # 填充量
+
+        else:
+            # 标准 YOLO 动态矩形
+            r = self.target_long_side / max(shape[0], shape[1])
+
+            new_pad = int(round(shape[1] * r)), int(round(shape[0] * r))
+
+            # 计算动态 padding: 只需要补齐到 stride 的倍数
+            dw = self.target_long_side - new_pad[0]
+            dh = self.target_long_side - new_pad[1]
+            dw, dh = np.mod(dw, self.stride), np.mod(dh, self.stride)  # 取模
+
         dw /= 2  # divide padding into 2 sides
         dh /= 2
 
@@ -199,16 +325,37 @@ class BashInference:
 
 
 class AreaAvgInference(BashInference):
-    def __init__(self, engine_path: str, areas: list[Area], confidence: float = 0.5,
-                 class_num: int = 3):
+    def __init__(self,
+                 engine_path: str,
+                 areas: list[Area],
+                 confidence: float = 0.5,
+                 class_num: int = 3,
+                 enable_trt_profile: bool = True,
+                 max_batch_size: int = 5,
+                 opt_batch_size: int = 5,
+                 input_image_size: tuple[int, int] = None,
+                 target_long_side: int = 640):
         """
         Initialize the area average inference.
         :param engine_path: Path to the ONNX engine file.
         :param areas : Division of the area
         :param confidence: Confidence threshold for filtering detections.
         :param class_num: Number of classes for detection.
+        :param enable_trt_profile: 是否启用 TensorRT 固定形状优化
+        :param max_batch_size: 预期的最大 Batch Size (仅在 enable_trt_profile=True 且模型输入动态时生效)
+        :param opt_batch_size: 预期的最优 Batch Size (仅在 enable_trt_profile=True 且模型输入动态时生效)
+        :param input_image_size: 摄像头/图片的原始分辨率 (Width, Height)。
+                                 如果传入此参数，会自动计算最佳的矩形输入尺寸 (Rectangular Inference)。
+                                 如果不传，默认使用 target_long_side 的正方形。
+        :param target_long_side: 预期的输入尺寸 (H, W) (仅在 enable_trt_profile=True 且模型输入动态时生效)
         """
-        super().__init__(engine_path)
+        super().__init__(model_path=engine_path,
+                         enable_trt_profile=enable_trt_profile,
+                         max_batch_size=max_batch_size,
+                         opt_batch_size=opt_batch_size,
+                         input_image_size=input_image_size,
+                         target_long_side=target_long_side
+                         )
         self.confidence = confidence
         self.class_num = class_num
         self.areas = np.array([[area.start_x, area.start_y, area.end_x, area.end_y] for area in areas],
@@ -311,18 +458,39 @@ def process_detections(raw_output: np.ndarray, area_bounds: np.ndarray, confiden
 
 
 class NumCountInference(BashInference):
-    def __init__(self, engine_path: str, confidence: float = 0.5):
+    def __init__(self,
+                 engine_path: str,
+                 confidence: float = 0.5,
+                 enable_trt_profile: bool = True,
+                 max_batch_size: int = 5,
+                 opt_batch_size: int = 5,
+                 input_image_size: tuple[int, int] = None,
+                 target_long_side: int = 640
+                 ):
         """
         Initialize the num cunt inference.
         :param engine_path: Path to the ONNX engine file.
         :param confidence: Confidence threshold for filtering detections.
+        :param enable_trt_profile: 是否启用 TensorRT 固定形状优化
+        :param max_batch_size: 预期的最大 Batch Size (仅在 enable_trt_profile=True 且模型输入动态时生效)
+        :param opt_batch_size: 预期的最优 Batch Size (仅在 enable_trt_profile=True 且模型输入动态时生效)
+        :param input_image_size: 摄像头/图片的原始分辨率 (Width, Height)。
+                                 如果传入此参数，会自动计算最佳的矩形输入尺寸 (Rectangular Inference)。
+                                 如果不传，默认使用 target_long_side 的正方形。
+        :param target_long_side: 预期的输入尺寸 (H, W) (仅在 enable_trt_profile=True 且模型输入动态时生效)
         """
-        super().__init__(engine_path)
+        super().__init__(model_path=engine_path,
+                         enable_trt_profile=enable_trt_profile,
+                         max_batch_size=max_batch_size,
+                         opt_batch_size=opt_batch_size,
+                         input_image_size=input_image_size,
+                         target_long_side=target_long_side
+                         )
         self.confidence = confidence
 
     def __call__(self, input_data: list[np.ndarray], raw=False) -> int:
         """
-        对输入图片进行推理，并进行NMS和置信度过滤(模型包含NMS)。然后，计算出钢坯数量，该数量值为batch中数量值的众数
+        对输入图片进行推理，并进行NMS和置信度过滤(模型包含NMS)。然后，计算出目标数量，该数量值为batch中数量值的众数
         :param input_data: Input data for inference. input_data :list[batch_size, height, width, channels]
         :return: num count
         """
