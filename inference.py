@@ -49,21 +49,26 @@ class BashInference:
         self.opt_batch_size = opt_batch_size
         self.target_long_side = target_long_side
 
-        if enable_trt_profile and input_image_size is not None:
-            self.is_fixed_size = True
-            # 计算最佳固定尺寸 (H, W)
-            self.img_size = self._cal_optimal_fixed_shape(input_image_size, target_long_side, self.stride)
-            print(f"ℹ️ [Init] 模式: TensorRT固定形状优化。锁定引擎尺寸: {self.img_size}")
+        # 这里的 img_size 作为正方形托底
+        self.img_size = [target_long_side, target_long_side]
 
+        if enable_trt_profile:
+            self.is_fixed_size = True
+            if input_image_size is not None:
+                self.img_size = self._cal_optimal_fixed_shape(input_image_size, target_long_side, self.stride)
+            print(f"ℹ️ [Init] 模式: TensorRT固定形状优化。锁定引擎尺寸: {self.img_size}")
 
         else:
             self.is_fixed_size = False
-            # 这里的 img_size 作为正方形托底
-            self.img_size = [target_long_side, target_long_side]
-            mode_str = "TRT动态形状" if enable_trt_profile else "普通推理"
-            print(f"ℹ️ [Init] 模式: {mode_str} (Standard Dynamic Rect)。目标长边: {target_long_side}")
+            print(f"ℹ️ [Init] 模式: 动态形状 (Standard Dynamic Rect)。目标长边: {target_long_side}")
 
         trt_profile_options = self._analyze_model_and_get_profile(enable_trt_profile)
+
+        trt_provider_options = {
+            'device_id': 0,
+            'trt_max_workspace_size': 4294967296,  # 4GB
+            'trt_fp16_enable': True,
+        }
 
         if enable_trt_profile:
             try:
@@ -74,13 +79,12 @@ class BashInference:
             except:
                 cache_dir = "."
 
-            trt_provider_options = {
-                'device_id': 0,
-                'trt_max_workspace_size': 4294967296,  # 4GB
-                'trt_fp16_enable': True,
+            cache_profile = {
                 'trt_engine_cache_enable': True,
                 'trt_engine_cache_path': cache_dir,
             }
+
+            trt_provider_options.update(cache_profile)
 
             # 如果启用了 Profile 优化，将生成的 shape 配置合并进去
             if trt_profile_options:
@@ -89,10 +93,6 @@ class BashInference:
                       f"   Opt: {trt_profile_options['trt_profile_opt_shapes']}\n"
                       f"   Max: {trt_profile_options['trt_profile_max_shapes']}")
                 trt_provider_options.update(trt_profile_options)
-        else:
-            trt_provider_options = {
-                'device_id': 0,
-            }
 
         providers = [
             ('TensorrtExecutionProvider', trt_provider_options),
