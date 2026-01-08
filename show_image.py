@@ -9,7 +9,7 @@ import os
 import argparse
 import cv2
 import numpy as np
-from inference import BashInference
+from inference.yolo_inference import YOLOInference
 from tqdm import tqdm
 
 
@@ -54,7 +54,7 @@ def main(args):
     """主函数，执行推理、绘制和保存."""
     # 1. 初始化推理引擎
     print("Initializing inference engine...")
-    inference_engine = BashInference(args.model)
+    inference_engine = YOLOInference(args.model)
     print("Engine initialized.")
 
     # 2. 准备输入输出目录
