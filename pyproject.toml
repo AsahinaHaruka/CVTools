@@ -12,4 +12,5 @@ inference = [
     "onnx>=1.19.1",
     "onnxslim>= 0.1.74",
     "onnxruntime-gpu>=1.23.2",
+    "regex"
 ]

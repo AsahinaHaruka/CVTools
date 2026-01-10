@@ -9,10 +9,11 @@ import sys
 from pathlib import Path
 from typing import Iterable, List
 from tqdm import tqdm
+import numpy as np
 
 import cv2
 
-IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"}
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"}
 
 
 def parse_args() -> argparse.Namespace:
@@ -34,9 +35,9 @@ def is_subpath(child: Path, parent: Path) -> bool:
 
 def list_images(src: Path, recursive: bool) -> Iterable[Path]:
     if recursive:
-        yield from (p for p in src.rglob("*") if p.is_file() and p.suffix.lower() in IMAGE_EXTS)
+        yield from (p for p in src.rglob("*") if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS)
     else:
-        yield from (p for p in src.iterdir() if p.is_file() and p.suffix.lower() in IMAGE_EXTS)
+        yield from (p for p in src.iterdir() if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS)
 
 
 def to_gray(in_path: Path, out_path: Path, overwrite: bool) -> bool:

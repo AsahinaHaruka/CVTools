@@ -15,9 +15,9 @@ import numpy as np
 import multiprocessing
 from tqdm import tqdm
 
-from perspective_transformation import PerspectiveTransformer
+from ulit.perspective_transformation import PerspectiveTransformer
 
-video_extensions = {'.mp4', '.mov', '.avi', '.mkv', '.flv', '.wmv', '.webm', '.dav'}
+VIDEO_EXTENSIONS = {'.mp4', '.mov', '.avi', '.mkv', '.flv', '.wmv', '.webm', '.dav'}
 
 # 容错阈值：允许连续由多少帧读取失败（监控视频坏帧常见，建议设大一点，比如100）
 MAX_TOLERANCE = 100
@@ -173,7 +173,7 @@ def process_videos(video_dir: str, output_dir: str, enable_perspective: bool = F
         os.makedirs(output_dir, exist_ok=True)
 
     video_files = [f for f in os.listdir(video_dir)
-                   if (os.path.splitext(f)[1].lower() in video_extensions and not f.startswith('.'))]
+                   if (os.path.splitext(f)[1].lower() in VIDEO_EXTENSIONS and not f.startswith('.'))]
     video_files.sort()
 
     have_processed = [f for f in os.listdir(output_dir) if os.path.isdir(os.path.join(output_dir, f))]

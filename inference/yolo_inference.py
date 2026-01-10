@@ -5,9 +5,9 @@
 @Date ：2025/8/22 08:58
 """
 import numpy as np
-import cv2
 
 from .base_inference import ONNXInference
+from .image_processor import ImageProcessor
 from ulit.data_define import Area
 
 
@@ -21,7 +21,7 @@ class YOLOInference(ONNXInference):
                  target_long_side: int = 640):
         """
         Initialize the ONNX inference session.
-        :param model_path: Path to the ONNX model file.
+        :param model_path: Path to the ONNX model file, must have NMS.
         :param enable_trt_profile: 是否启用 TensorRT 固定形状优化
         :param max_batch_size: 预期的最大 Batch Size (仅在 enable_trt_profile=True 且模型输入动态时生效)
         :param opt_batch_size: 预期的最优 Batch Size (仅在 enable_trt_profile=True 且模型输入动态时生效)
@@ -31,12 +31,21 @@ class YOLOInference(ONNXInference):
         :param target_long_side: 预期的输入尺寸 (H, W) (仅在 enable_trt_profile=True 且模型输入动态时生效)
         """
         super().__init__(model_path=model_path,
+                         stride=32,
                          enable_trt_profile=enable_trt_profile,
                          max_batch_size=max_batch_size,
                          opt_batch_size=opt_batch_size,
                          input_image_size=input_image_size,
                          target_long_side=target_long_side
                          )
+
+        self.image_processor = ImageProcessor(target_size=self.img_size,
+                                              stride=self.stride,
+                                              is_fixed_size=self.fix_image,
+                                              fill_value=144,
+                                              dtype=self.input_meta[0]['type'])
+
+
 
     def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw=True) -> np.ndarray:
         """
@@ -46,126 +55,13 @@ class YOLOInference(ONNXInference):
         :return: Inference results with shape [batch, self.max_detections,  self.output_dim],default self.output_dim=6, where 6 = (x,y,x,y,score,class)
         """
         # 预处理输入数据
-        processed_input, transform_params = self._preprocess(input_data)
+        processed_input, transform_params = self.image_processor(input_data)
 
         # 执行推理
-        outputs = super().__call__(processed_input)
-        return self._convert_to_original_coords(outputs, transform_params) \
-            if raw else outputs
+        outputs = super().__call__(processed_input)[0].astype(np.float32)
+        return self.image_processor.convert_to_original_coords(outputs, transform_params) if raw else outputs
 
-    def trans_img(self, img: np.ndarray) -> tuple[np.ndarray, dict]:
-        """Resize and pad an image for object detection"""
-        shape = img.shape[:2]
 
-        if self.is_fixed_size:
-            # 强制适配到 self.img_size
-            # 这里的 self.img_size 是初始化时算好的绝对值
-            r = min(self.img_size[0] / shape[0], self.img_size[1] / shape[1])  # 缩放比例
-            new_pad = int(round(shape[1] * r)), int(round(shape[0] * r))  # 缩放后的宽高
-            dw, dh = self.img_size[1] - new_pad[0], self.img_size[0] - new_pad[1]  # 填充量
-
-        else:
-            # 标准 YOLO 动态矩形
-            r = self.target_long_side / max(shape[0], shape[1])
-
-            new_pad = int(round(shape[1] * r)), int(round(shape[0] * r))
-
-            # 计算动态 padding: 只需要补齐到 stride 的倍数
-            dw = self.target_long_side - new_pad[0]
-            dh = self.target_long_side - new_pad[1]
-            dw, dh = np.mod(dw, self.stride), np.mod(dh, self.stride)  # 取模
-
-        dw /= 2  # divide padding into 2 sides
-        dh /= 2
-
-        if shape[::-1] != new_pad:  # resize
-            transformed_img = cv2.resize(img, new_pad, interpolation=cv2.INTER_LINEAR)
-            if transformed_img.ndim == 2:
-                transformed_img = transformed_img[..., None]
-        else:
-            transformed_img = img.copy()
-            if transformed_img.ndim == 2:
-                transformed_img = transformed_img[..., None]
-
-        top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
-        left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
-        h, w, c = transformed_img.shape
-        if c == 3:
-            transformed_img = cv2.copyMakeBorder(
-                transformed_img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=(114,) * 3
-            )
-        else:  # multispectral
-            pad_img = np.full((h + top + bottom, w + left + right, c), fill_value=114, dtype=transformed_img.dtype)
-            pad_img[top: top + h, left: left + w] = transformed_img
-            transformed_img = pad_img
-        transform_params = {
-            'orig_shape': shape,
-            'scale': r,
-            'padding': (left, top)
-        }
-        return transformed_img, transform_params
-
-    def _preprocess(self, input_data: list[np.ndarray]) -> tuple[np.ndarray, list[dict]]:
-        """
-        预处理输入数据
-        :param input_data: 输入图像列表
-        :return: 预处理后的numpy数组
-        """
-        transformed_data = []
-        transform_params = []
-
-        for img in input_data:
-            t_img, t_params = self.trans_img(img)
-            transformed_data.append(t_img)
-            transform_params.append(t_params)
-
-        input_tensor = np.stack(transformed_data)
-        if input_tensor.shape[-1] == 3:
-            input_tensor = input_tensor[..., ::-1]  # BGR to RGB
-        input_tensor = input_tensor.transpose((0, 3, 1, 2))  # BHWC to BCHW, (n, 3, h, w)
-        input_tensor = np.ascontiguousarray(input_tensor)
-
-        input_tensor = input_tensor.astype(np.float32) / 255.0
-        if self.dtype != np.float32:
-            input_tensor = input_tensor.astype(self.dtype)
-
-        return input_tensor, transform_params
-
-    @staticmethod
-    def _convert_to_original_coords(detections: np.ndarray, transform_params: list) -> np.ndarray:
-        """
-        将检测结果转换回原始图像坐标系
-        :param detections: 模型输出的检测结果 [batch, max_detections, output_dim]
-        :param transform_params: 每个图像的变换参数
-        :return: 原始坐标系下的检测结果
-        """
-        batch_size = detections.shape[0]
-        result = detections.copy()
-
-        for i in range(batch_size):
-            valid_mask = detections[i, :, 4] > 0  # 假设第5列是置信度分数
-
-            if not np.any(valid_mask):
-                continue  # 如果没有有效检测，跳过当前batch
-
-            # 获取当前图像的变换参数
-            params = transform_params[i]
-            r = params['scale']  # 缩放比例
-            pad_w, pad_h = params['padding']  # 填充量
-
-            # 提取检测框坐标并转换
-            valid_boxes = result[i, valid_mask, :4]  # (x, y, x, y)
-
-            # 坐标转换：减去填充再除以缩放比例
-            valid_boxes[:, 0] = (valid_boxes[:, 0] - pad_w) / r  # x1
-            valid_boxes[:, 1] = (valid_boxes[:, 1] - pad_h) / r  # y1
-            valid_boxes[:, 2] = (valid_boxes[:, 2] - pad_w) / r  # x2
-            valid_boxes[:, 3] = (valid_boxes[:, 3] - pad_h) / r  # y2
-
-            # 更新结果
-            result[i, valid_mask, :4] = valid_boxes
-
-        return result
 
     def __del__(self):
         """清理资源"""

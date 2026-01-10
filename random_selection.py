@@ -9,13 +9,13 @@ import random
 import shutil
 from pathlib import Path
 
-image_extensions = {'.jpg', '.jpeg', '.png', '.bmp'}
+IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.bmp'}
 
 
 def _get_image_count(src_dir: Path) -> int:
     """计算文件夹内图片数量"""
     return len([f for f in src_dir.iterdir() if
-                (f.is_file() and f.suffix.lower() in image_extensions and not f.name.startswith('.'))])
+                (f.is_file() and f.suffix.lower() in IMAGE_EXTENSIONS and not f.name.startswith('.'))])
 
 
 def _select_random_files(src_dir: Path, dst_dir: Path, num_files: int):
@@ -24,7 +24,7 @@ def _select_random_files(src_dir: Path, dst_dir: Path, num_files: int):
     """
     # 获取所有文件的列表
     files = [f for f in src_dir.iterdir() if
-             (f.is_file() and f.suffix.lower() in image_extensions and not f.name.startswith('.'))]
+             (f.is_file() and f.suffix.lower() in IMAGE_EXTENSIONS and not f.name.startswith('.'))]
 
     if len(files) == 0:
         return
