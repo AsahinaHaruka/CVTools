@@ -9,18 +9,56 @@ import numpy as np
 
 
 def zero2one(input_tensor: np.ndarray) -> np.ndarray:
+    """
+    将输入张量归一化到 [0, 1] 范围。
+
+    Args:
+        input_tensor (np.ndarray): 待归一化的 NumPy 数组，通常为图像数据。
+
+    Returns:
+        np.ndarray: 归一化后的 NumPy 数组，数据类型为 float32。
+    """
     return input_tensor.astype(np.float32) / 255.0
 
 
 def minus_one2one(input_tensor: np.ndarray) -> np.ndarray:
+    """
+    将输入张量归一化到 [-1, 1] 范围。
+
+    Args:
+        input_tensor (np.ndarray): 待归一化的 NumPy 数组，通常为图像数据。
+
+    Returns:
+        np.ndarray: 归一化后的 NumPy 数组，数据类型为 float32。
+    """
     input_tensor = input_tensor.astype(np.float32) / 255.0
     return (input_tensor - 0.5) / 0.5
 
 
 def imagenet(input_tensor: np.ndarray) -> np.ndarray:
+    """
+    使用 ImageNet 的均值和标准差对输入张量进行归一化。
+
+    Args:
+        input_tensor (np.ndarray): 待归一化的 NumPy 数组，通常为图像数据，
+            期望形状为 (N, C, H, W) 或 (C, H, W)，且像素值在 [0, 255] 范围内。
+
+    Returns:
+        np.ndarray: 归一化后的 NumPy 数组，数据类型为 float32。
+    """
     input_tensor = input_tensor.astype(np.float32) / 255.0
-    mean = np.array([0.485, 0.456, 0.406], dtype=np.float32).reshape(1, 3, 1, 1)
-    std = np.array([0.229, 0.224, 0.225], dtype=np.float32).reshape(1, 3, 1, 1)
+
+    # 确保 mean 和 std 的形状与输入张量兼容，以便进行广播
+    # 如果输入是 (N, C, H, W)，则 mean/std 形状为 (1, C, 1, 1)
+    # 如果输入是 (C, H, W)，则 mean/std 形状为 (C, 1, 1)
+    num_channels = input_tensor.shape[1] if input_tensor.ndim == 4 else input_tensor.shape[0]
+    
+    mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+    std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+
+    # 调整形状以匹配输入张量的维度，通常是 (1, C, 1, 1) 或 (C, 1, 1)
+    mean = mean.reshape(1, num_channels, 1, 1) if input_tensor.ndim == 4 else mean.reshape(num_channels, 1, 1)
+    std = std.reshape(1, num_channels, 1, 1) if input_tensor.ndim == 4 else std.reshape(num_channels, 1, 1)
     return (input_tensor - mean) / std
 
 NORM_CALL={
@@ -39,12 +77,22 @@ class ImageProcessor:
                  fill_value: int = 114,
                  dtype: np.dtype = np.float32):
         """
-        图像预处理与后处理工具类
+        图像预处理与后处理工具类。
 
-        :param target_size: 目标尺寸 (int or (h, w))
-        :param stride: 模型步长，用于计算 padding 对齐
-        :param is_fixed_size: 是否强制缩放到固定尺寸 (TensorRT/Static Shape 常用)
-        :param fill_value: Padding 的填充值
+        Args:
+            target_size (int | tuple[int, int]): 目标尺寸。
+                如果为 int，表示目标图像的目标长边。
+                如果为 tuple[int, int]，表示目标图像的 (height, width)。
+                是否填充短边取决于 `is_fixed_size`
+                默认为 640
+            stride (int): 模型步长，用于计算 padding 对齐。默认为 32。
+            is_fixed_size (bool): 是否强制缩放到固定尺寸。
+                如果为 True，图像将被缩放并填充到 `target_size` 指定的绝对尺寸。
+                如果为 False，图像长边缩放到 `target_size`，短边自然缩放，
+                然后填充到 `stride` 的倍数。默认为 False。
+            norm_type (str): 归一化类型，可选 '0_1', '-1_1', 'imagenet'。默认为 "0_1"。
+            fill_value (int): Letterbox 填充时的像素值。默认为 114。
+            dtype (np.dtype): 最终输出 NumPy 数组的数据类型。默认为 np.float32。
         """
         self.stride = stride
         self.is_fixed_size = is_fixed_size
@@ -62,7 +110,20 @@ class ImageProcessor:
             self.long_side = max(self.target_h, self.target_w)
 
     def letterbox(self, img: np.ndarray) -> tuple[np.ndarray, dict]:
+        """
+        对单张图片进行 Letterbox 处理，包括缩放和填充。
 
+        根据 `is_fixed_size` 的设置，图片会被缩放到目标尺寸并填充，
+        或者长边缩放到 `target_long_side`，短边自然缩放后填充到 `stride` 的倍数。
+
+        Args:
+            img (np.ndarray): 输入图像，形状为 (H, W) 或 (H, W, C)。
+
+        Returns:
+            tuple[np.ndarray, dict]: 包含两个元素的元组。
+                - np.ndarray: 经过 Letterbox 处理后的图像，形状为 (H', W', C')。
+                - dict: 包含变换参数的字典，键包括 'orig_shape' (原始图像形状), 'scale' (缩放比例), 'padding' (左上角填充量)。
+        """
         """单张图片的 Letterbox 处理 """
 
         shape = img.shape[:2]
@@ -122,9 +183,20 @@ class ImageProcessor:
 
     def __call__(self, input_data: list[np.ndarray] | np.ndarray) -> tuple[np.ndarray, list[dict]]:
         """
-        预处理输入数据
-        :param input_data: 输入图像列表
-        :return: 预处理后的numpy数组
+        对输入图像数据进行预处理，包括 Letterbox 缩放、通道转换、维度重排和归一化。
+
+        Args:
+            input_data (list[np.ndarray] | np.ndarray): 输入图像数据。
+                可以是单个 NumPy 数组 (H, W) 或 (H, W, C)，
+                也可以是包含多个 NumPy 数组的列表。
+
+        Returns:
+            tuple[np.ndarray, list[dict]]: 包含两个元素的元组。
+                - np.ndarray: 经过预处理的图像张量，形状为 (N, C, H, W)，数据类型为 self.dtype。
+                - list[dict]: 包含每张图像原始形状、缩放比例和填充量的字典列表，
+                              用于后续的后处理（如坐标还原）。
+        """
+        """
         """
         if isinstance(input_data, np.ndarray):
             # 如果是np.ndarray且为 (H, W) 或 (H, W, C)，说明是单张图 -> 包装成 list
@@ -152,10 +224,19 @@ class ImageProcessor:
     @staticmethod
     def convert_to_original_coords(detections: np.ndarray, transform_params: list) -> np.ndarray:
         """
-        将检测结果转换回原始图像坐标系
-        :param detections: 模型输出的检测结果 [batch, max_detections, output_dim]
-        :param transform_params: 每个图像的变换参数
-        :return: 原始坐标系下的检测结果
+        将检测结果从模型输出坐标系转换回原始图像坐标系（YOLO系列）。
+
+        此方法用于在模型推理后，将检测到的边界框坐标从经过 Letterbox 处理后的图像尺寸
+        还原到原始输入图像的尺寸。
+
+        Args:
+            detections (np.ndarray): 模型输出的检测结果，形状为 `[batch, max_detections, output_dim]`。
+                                     其中 `output_dim` 至少包含 `(x1, y1, x2, y2, score, ...)`。
+                                     假设第5列（索引为4）是置信度分数，用于过滤无效检测。
+            transform_params (list[dict]): 包含每个图像预处理时使用的变换参数的字典列表。
+                                           每个字典应包含 'scale' (缩放比例) 和 'padding' (左上角填充量)。
+        Returns:
+            np.ndarray: 转换回原始图像坐标系后的检测结果，形状与 `detections` 相同。
         """
         batch_size = detections.shape[0]
         result = detections.copy()
@@ -191,6 +272,30 @@ class ImageProcessor:
                                  input_shape: tuple[int, int],
                                  box_format: str = 'xyxy') -> np.ndarray:
         """
+        将归一化后的边界框坐标转换回原始图像坐标系。
+
+        此方法处理以下转换步骤：
+        1. **反归一化**: 如果边界框坐标是 [0, 1] 范围内的归一化值，则将其乘以模型的输入尺寸 (model_w, model_h)。
+           通过检查坐标的最大值（如果小于等于 1.5，则认为是归一化数据）来自动判断。
+        2. **格式转换**: 如果 `box_format` 为 'cxcywh' (中心点坐标和宽高)，则将其转换为 'xyxy' (左上角和右下角坐标)。
+        3. **还原到原图**: 减去 Letterbox 预处理时添加的填充 (padding)，然后除以缩放比例 (scale)，
+           将坐标从 Letterbox 图像尺寸还原到原始图像尺寸。
+
+        Args:
+            boxes (np.ndarray): 模型的输出边界框，形状为 `(batch_size, num_boxes, 4)`。
+                                坐标可以是归一化的 (0-1) 或非归一化的，格式可以是 'xyxy' 或 'cxcywh'。
+            transform_params (list[dict]): 包含每个图像预处理时使用的变换参数的字典列表。
+                                           每个字典应包含 'scale' (缩放比例) 和 'padding' (左上角填充量)。
+            input_shape (tuple[int, int]): 模型输入的图像尺寸，格式为 (height, width)。
+                                           用于反归一化步骤。
+            box_format (str, optional): 输入边界框的格式。可选 'xyxy' 或 'cxcywh'。默认为 'xyxy'。
+
+        Returns:
+            np.ndarray: 转换回原始图像坐标系且为 'xyxy' 格式的边界框，形状与 `boxes` 相同。
+
+        Raises:
+            ValueError: 如果 `box_format` 不是 'xyxy' 或 'cxcywh'。
+
         """
         result = boxes.copy()
         batch_size = result.shape[0]
@@ -236,12 +341,34 @@ class ImageProcessor:
 
     @staticmethod
     def restore_masks(masks: np.ndarray, transform_params: list[dict],input_shape: tuple[int, int]) -> list[np.ndarray]:
-        """
-        还原 Mask (处理输出尺寸与输入尺寸不一致的情况)
-        :param masks: (Batch, Num_Queries, Mask_H, Mask_W) -> (1, 200, 288, 288)
-        :param transform_params: 预处理参数
+        """将模型输出的 Mask 还原到原始图像尺寸。（input_shape为缩放后用于模型输入的图像尺寸，将会还原到原始图片尺寸）
+
+        此方法处理以下步骤：
+        1. **维度处理**: 确保 Mask 数组的维度正确，如果输入是 (Num_Queries, Mask_H, Mask_W)，则添加 Batch 维度。
+        2. **裁剪 Mask**: 根据预处理时 Letterbox 操作引入的 padding，从 Mask 中裁剪出有效区域。
+        3. **缩放 Mask**: 将裁剪后的 Mask 缩放回原始图像的尺寸。
+        4. **二值化**: 将缩放后的 Mask 转换为二值 Mask (0 或 255)。
+
+        Args:
+            masks (np.ndarray): 模型输出的 Mask 数组。
+                                期望形状为 `(Batch, Num_Queries, Mask_H, Mask_W)`
+                                或 `(Num_Queries, Mask_H, Mask_W)` (如果 Batch 为 1)。
+                                Mask 值通常是 logits。
+            transform_params (list[dict]): 包含每个图像预处理时使用的变换参数的字典列表。
+                                           每个字典应包含 'orig_shape' (原始图像形状) 和 'padding' (左上角填充量)。
+            input_shape (tuple[int, int]): 模型输入的图像尺寸，格式为 (height, width)。
+                                           例如，如果模型输入是 1024x1024，则为 (1024, 1024)。
+
+        Returns:
+            list[np.ndarray]: 还原到原始图像尺寸的二值 Mask 列表。
+                              列表中的每个元素是一个 NumPy 数组，形状为 `(Num_Queries, Orig_H, Orig_W)`，
+                              像素值为 0 或 255。
+
+        Raises:
+            ValueError: 如果 `masks` 的维度不符合预期。
         """
         input_h, input_w = input_shape
+
         restored_results = []
         if masks.ndim == 3:
             masks = masks[None, ...]
@@ -249,9 +376,6 @@ class ImageProcessor:
         # 获取模型输出的 mask 尺寸 (288, 288)
         mask_h, mask_w = masks.shape[-2:]
 
-        # 获取模型输入的尺寸 (1008, 1008) - 从 self 中获取或者假设是正方形
-        # transform_params 中的 scale 是相对于 input_size (1008) 的
-        # 我们需要计算 mask 相对于 input_size 的缩放因子
 
         for i, mask_tensor in enumerate(masks):
             params = transform_params[i]

@@ -60,10 +60,27 @@ class SimpleCLIPBPETokenizer:
         max_length: int = 32,
         bos_token_id: int = 49406,
         eos_token_id: int = 49407,
-        added_tokens: dict[str, int] = None,
+        added_tokens: dict[str, int] | None = None,
         bpe_vocab_size: int = 49152,  # 一般和 merges 文件里取的行数一致
         do_lower_case: bool = True,
     ) -> None:
+        """
+        初始化 SimpleCLIPBPETokenizer。
+
+        Args:
+            vocab_file (str): 词汇表文件的路径 (vocab.json)。
+            merges_file (str): BPE 合并规则文件的路径 (merges.txt)。
+            max_length (int, optional): 编码后序列的最大长度，超出部分将被截断，不足部分将被填充。默认为 32。
+            bos_token_id (int, optional): 序列开始 (Beginning Of Sequence) token 的 ID。默认为 49406。
+            eos_token_id (int, optional): 序列结束 (End Of Sequence) token 的 ID。默认为 49407。
+            added_tokens (dict[str, int] | None, optional): 额外的特殊 token 及其 ID 的字典。
+                如果为 None，将使用默认的 "<|startoftext|>" 和 "<|endoftext|>"。默认为 None。
+            bpe_vocab_size (int, optional): BPE 词汇表的大小，用于从 merges 文件中读取规则。
+                通常与 merges 文件中实际的规则数量相关。默认为 49152。
+            do_lower_case (bool, optional): 在分词前是否将文本转换为小写。默认为 True。
+        """
+
+
         self.max_length = max_length
         self.bos_token_id = bos_token_id
         self.eos_token_id = eos_token_id

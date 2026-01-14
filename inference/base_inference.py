@@ -32,20 +32,36 @@ class ONNXInference:
                  stride: int = 32,
                  max_batch_size: int = 5,
                  opt_batch_size: int = 5,
-                 input_image_size: tuple[int, int] = None,
+                 input_image_size: tuple[int, int] | None = None,
                  target_long_side: int = 640,
                  other_size: tuple[int, int, int] = (0, 100, 200)):
-        """
-        Initialize the ONNX inference session.
-        :param model_path: Path to the ONNX model file.
-        :param enable_trt_profile: 是否启用 TensorRT 固定形状优化
-        :param max_batch_size: 预期的最大 Batch Size (仅在 enable_trt_profile=True 且模型输入动态时生效)
-        :param opt_batch_size: 预期的最优 Batch Size (仅在 enable_trt_profile=True 且模型输入动态时生效)
-        :param input_image_size: 摄像头/图片的原始分辨率 (Width, Height)。
-                                 如果传入此参数，会自动计算最佳的矩形输入尺寸 (Rectangular Inference)。
-                                 如果不传，默认使用 target_long_side 的正方形。
-        :param target_long_side: 预期的输入尺寸 (H, W) (仅在 enable_trt_profile=True 且模型输入动态时生效)
-        :param other_size: 对于非图像维度的预期的输入尺寸 (min,opt,max) (仅在 enable_trt_profile=True 且模型输入动态时生效)
+        """初始化 ONNX 推理会话。
+
+        加载 ONNX 模型并配置推理会话选项。支持 TensorRT 执行提供程序及其动态形状配置。
+        如果启用了 TensorRT 配置文件 (`enable_trt_profile=True`)，将根据提供的批处理大小和图像尺寸参数
+        构建优化配置文件。
+
+        Args:
+            model_path (str): ONNX 模型文件的路径。
+            enable_trt_profile (bool, optional): 是否启用 TensorRT 动态形状配置文件生成。
+                如果为 True，将根据 batch size 和尺寸参数预热 TensorRT 引擎缓存，
+                该参数为True时无论是否提供input_image_size，fix_image为True。默认为 False。
+            stride (int, optional): 模型步长，用于计算对齐后的输入尺寸。默认为 32。
+            max_batch_size (int, optional): 预期的最大 Batch Size。
+                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。默认为 5。
+            opt_batch_size (int, optional): 预期的最优 Batch Size。
+                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。默认为 5。
+            input_image_size (tuple[int, int] | None, optional): 原始输入图像的分辨率 (Width, Height)。
+                如果提供，将基于 `target_long_side` 计算最佳矩形推理尺寸 (Rectangular Inference)，此时fix_image为True。
+                如果不提供，默认使用 `target_long_side` 作为边长的正方形尺寸，此时fix_image为False。默认为 None。
+            target_long_side (int, optional): 预期的输入图像长边尺寸。
+                用于计算实际推理时的输入分辨率。默认为 640。
+            other_size (tuple[int, int, int], optional): 非图像维度的动态输入尺寸配置 (min, opt, max)。
+                用于 TensorRT Profile 中非 Batch、非 Image (H/W) 的动态维度（如序列长度）。
+                默认为 (0, 100, 200)。
+
+        Raises:
+            FileNotFoundError: 如果 `model_path` 指定的文件不存在。
         """
         self.model_path = model_path
         self.stride = stride
@@ -154,15 +170,25 @@ class ONNXInference:
                     return h, w
         return None, None
 
-    @staticmethod
-    def _get_inference_size(target_long: int, stride: int, input_wh: tuple[int, int] = None) -> tuple[int, int]:
+    def _get_inference_size(self,target_long: int, stride: int, input_wh: tuple[int, int] = None) -> tuple[int, int]:
         """
         统一计算推理尺寸，并强制执行 Stride 对齐检查。
-        如果尺寸不满足 Stride 要求，会自动修正并打印 Warning。
-        :return: [Height, Width]
+
+        该方法首先根据 `input_wh` 和 `target_long` 计算初步的缩放尺寸。
+        然后，它将这些尺寸向上取整到 `stride` 的最近倍数，以确保模型输入尺寸的兼容性。
+
+        Args:
+            target_long (int): 目标长边尺寸。
+            stride (int): 模型步长，用于对齐尺寸。
+            input_wh (tuple[int, int] | None, optional): 原始输入图像的宽度和高度 (W, H)。
+                如果提供，将根据原始图像比例和 target_long 计算推理尺寸。
+                如果为 None，则默认使用 target_long 作为正方形的边长。
+
+        Return: [Height, Width]
         """
         if input_wh is not None:
             # 矩形推理 (根据原图比例计算)
+            self.fix_image=True
             w, h = input_wh
             scale = target_long / max(w, h)
             # 初步计算缩放后的尺寸
@@ -239,13 +265,29 @@ class ONNXInference:
 
     def __call__(self, input_data: dict[str, np.ndarray] | list[np.ndarray] | np.ndarray) -> Sequence[
         ndarray | SparseTensor | list | dict]:
-        """
-        执行推理。
-        :param input_data:
-            - Dict: {input_name: data} (推荐，最安全)
-            - List: [data1, data2] (按模型 export 时的输入顺序)
-            - Array: data (仅适用于单输入模型)
-        :return:  list of results, every result is either a numpy array, a sparse tensor, a list or a dictionary. (对应 export 时的输出顺序)
+        """执行 ONNX 模型的推理。
+
+        此方法根据 `input_data` 的类型自动构建 `feed_dict`，然后执行 ONNX Runtime 会话。
+
+        Args:
+            input_data (dict[str, np.ndarray] | list[np.ndarray] | np.ndarray):
+                输入数据，支持以下格式：
+                - `dict[str, np.ndarray]`: 字典形式，键为模型输入名称，值为对应的 NumPy 数组。
+                                          这是最推荐和最安全的方式，因为它明确指定了每个输入的名称。
+                - `list[np.ndarray] | tuple[np.ndarray, ...]`: 列表或元组形式，包含多个 NumPy 数组。
+                                                               数组的顺序必须与模型导出时的输入顺序一致。
+                - `np.ndarray`: 单个 NumPy 数组。仅适用于模型只有一个输入的情况。
+
+        Returns:
+            Sequence[np.ndarray | SparseTensor | list | dict]:
+                推理结果的序列。每个元素可以是 NumPy 数组、稀疏张量、列表或字典，
+                其顺序与模型导出时的输出顺序对应。
+
+        Raises:
+            ValueError:
+                - 如果 `input_data` 是列表或元组，但其长度与模型期望的输入数量不匹配。
+                - 如果 `input_data` 是单个 NumPy 数组，但模型有多个输入。
+
         """
         feed_dict = {}
 

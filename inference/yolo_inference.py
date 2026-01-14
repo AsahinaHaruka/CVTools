@@ -19,16 +19,30 @@ class YOLOInference(ONNXInference):
                  opt_batch_size: int = 5,
                  input_image_size: tuple[int, int] = None,
                  target_long_side: int = 640):
-        """
-        Initialize the ONNX inference session.
-        :param model_path: Path to the ONNX model file, must have NMS.
-        :param enable_trt_profile: 是否启用 TensorRT 固定形状优化
-        :param max_batch_size: 预期的最大 Batch Size (仅在 enable_trt_profile=True 且模型输入动态时生效)
-        :param opt_batch_size: 预期的最优 Batch Size (仅在 enable_trt_profile=True 且模型输入动态时生效)
-        :param input_image_size: 摄像头/图片的原始分辨率 (Width, Height)。
-                                 如果传入此参数，会自动计算最佳的矩形输入尺寸 (Rectangular Inference)。
-                                 如果不传，默认使用 target_long_side 的正方形。
-        :param target_long_side: 预期的输入尺寸 (H, W) (仅在 enable_trt_profile=True 且模型输入动态时生效)
+        """初始化 YOLO 推理会话。
+
+        加载 YOLO ONNX 模型并配置推理会话选项。支持 TensorRT 执行提供程序及其动态形状配置。
+        如果启用了 TensorRT 配置文件 (`enable_trt_profile=True`)，将根据提供的批处理大小和图像尺寸参数
+        构建优化配置文件。
+
+        Args:
+            model_path (str): ONNX 模型文件的路径，该模型应包含 NMS (Non-Maximum Suppression) 操作。
+            enable_trt_profile (bool, optional): 是否启用 TensorRT 动态形状配置文件生成。
+                如果为 True，将根据 batch size 和尺寸参数预热 TensorRT 引擎缓存。
+                当此参数为 True 时，无论是否提供 `input_image_size`，`fix_image` 都将被设置为 True。
+                默认为 False。
+            max_batch_size (int, optional): 预期的最大 Batch Size。
+                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。
+                默认为 5。
+            opt_batch_size (int, optional): 预期的最优 Batch Size。
+                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。
+                默认为 5。
+            input_image_size (tuple[int, int] | None, optional): 原始输入图像的分辨率 (Width, Height)。
+                如果提供，将基于 `target_long_side` 计算最佳矩形推理尺寸 (Rectangular Inference)，此时fix_image为True。
+                如果不提供，默认使用 `target_long_side` 作为边长的正方形尺寸，此时fix_image为False。默认为 None。
+            target_long_side (int, optional): 预期的输入图像长边尺寸。
+                用于计算实际推理时的输入分辨率。
+                默认为 640。
         """
         super().__init__(model_path=model_path,
                          stride=32,
@@ -48,11 +62,22 @@ class YOLOInference(ONNXInference):
 
 
     def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw=True) -> np.ndarray:
-        """
-        Perform inference on the input data.
-        :param input_data: Input data for inference. input_data :list[batch_size, height, width, channels]
-        :param raw: If True, return results in original image coordinates; otherwise, return in model output coordinates.
-        :return: Inference results with shape [batch, self.max_detections,  self.output_dim],default self.output_dim=6, where 6 = (x,y,x,y,score,class)
+        """执行 YOLO 模型的推理。
+
+        该方法首先对输入图像数据进行预处理，然后将处理后的图像输入模型进行推理。
+        根据 `raw` 参数，选择是否将推理结果（边界框）还原到原始图像坐标系。
+
+        Args:
+            input_data (list[np.ndarray] | np.ndarray): 输入图像数据。
+                可以是单个 NumPy 数组 (H, W) 或 (H, W, C)，
+                也可以是包含多个 NumPy 数组的列表，每个数组代表一张图像。
+            raw (bool, optional): 如果为 True，则返回模型原始输出的边界框（未经过后处理）；
+                                  否则，边界框将被还原到原始图像坐标系。
+                                  默认为 True。
+
+        Returns:
+            np.ndarray: 推理结果。形状为 `[batch, max_detections, output_dim]`，
+                        其中 `output_dim` 通常为 6，表示 `(x1, y1, x2, y2, score, class_id)`。
         """
         # 预处理输入数据
         processed_input, transform_params = self.image_processor(input_data)
@@ -80,7 +105,7 @@ class YOLOInference(ONNXInference):
 
 class AreaAvgInference(YOLOInference):
     def __init__(self,
-                 engine_path: str,
+                 model_path: str,
                  areas: list[Area],
                  confidence: float = 0.5,
                  class_num: int = 3,
@@ -90,20 +115,29 @@ class AreaAvgInference(YOLOInference):
                  input_image_size: tuple[int, int] = None,
                  target_long_side: int = 640):
         """
-        Initialize the area average inference.
-        :param engine_path: Path to the ONNX engine file.
-        :param areas : Division of the area
-        :param confidence: Confidence threshold for filtering detections.
-        :param class_num: Number of classes for detection.
-        :param enable_trt_profile: 是否启用 TensorRT 固定形状优化
-        :param max_batch_size: 预期的最大 Batch Size (仅在 enable_trt_profile=True 且模型输入动态时生效)
-        :param opt_batch_size: 预期的最优 Batch Size (仅在 enable_trt_profile=True 且模型输入动态时生效)
-        :param input_image_size: 摄像头/图片的原始分辨率 (Width, Height)。
-                                 如果传入此参数，会自动计算最佳的矩形输入尺寸 (Rectangular Inference)。
-                                 如果不传，默认使用 target_long_side 的正方形。
-        :param target_long_side: 预期的输入尺寸 (H, W) (仅在 enable_trt_profile=True 且模型输入动态时生效)
+        Args:
+            model_path (str): ONNX 模型文件的路径。
+            areas: 预定义区域的边界坐标，形状为 `[num_areas, 4]`。
+                其中 4 = (start_x, start_y, end_x, end_y)。
+            class_num (int): 模型输出的类别总数。用于类别投票时的 `minlength` 参数。
+            confidence (float, optional): 置信度阈值。默认为 0.5。
+            enable_trt_profile (bool, optional): 是否启用 TensorRT 动态形状配置文件生成。
+                如果为 True，将根据 batch size 和尺寸参数预热 TensorRT 引擎缓存，
+                该参数为True时无论是否提供input_image_size，fix_image为True。默认为 False。
+            max_batch_size (int, optional): 预期的最大 Batch Size。
+                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。默认为 5。
+            opt_batch_size (int, optional): 预期的最优 Batch Size。
+                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。默认为 5。
+            input_image_size (tuple[int, int] | None, optional): 原始输入图像的分辨率 (Width, Height)。
+                如果提供，将基于 `target_long_side` 计算最佳矩形推理尺寸 (Rectangular Inference)，此时fix_image为True。
+                如果不提供，默认使用 `target_long_side` 作为边长的正方形尺寸，此时fix_image为False。默认为 None。
+            target_long_side (int, optional): 预期的输入图像长边尺寸。
+                用于计算实际推理时的输入分辨率。默认为 640。
+
+        Raises:
+            FileNotFoundError: 如果 `model_path` 指定的文件不存在。
         """
-        super().__init__(model_path=engine_path,
+        super().__init__(model_path=model_path,
                          enable_trt_profile=enable_trt_profile,
                          max_batch_size=max_batch_size,
                          opt_batch_size=opt_batch_size,
@@ -116,13 +150,28 @@ class AreaAvgInference(YOLOInference):
                               dtype=np.float32)
 
     def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw=True) -> np.ndarray:
-        """
-        对输入图片进行推理，并进行NMS和置信度过滤。然后，筛选出那些落在感兴趣区域内的点，
-        列表areas中的每一项表示一个感兴趣区域，定义见data_define Area，最后根据区域划分进行跨batch合并。
-        在进行合并时，认为所有batch里anchors中心落在同一区域的是同一物体的边框,
-        对同一物体的边框由加权平均确定，对同一物体的类别由出现的类别的大多数确定。
-        :param input_data: Input data for inference. input_data :list[batch_size, height, width, channels]
-        :return: Inference results with shape [ len(areas),5] where 5 = (x,y,x,y,class)， class=-1表示无检测
+        """对输入图片进行推理，然后根据预定义区域进行结果合并。
+
+        该方法首先调用父类的 `__call__` 方法获取原始的检测结果。
+        接着，它会筛选出置信度高于阈值的检测框，并根据这些检测框的中心点判断它们属于哪个预定义区域。
+        对于每个区域，它会合并所有批次中落入该区域的检测结果，通过加权平均确定最终的边界框，
+        并通过加权投票确定主导类别。
+
+        Args:
+            input_data (list[np.ndarray] | np.ndarray): 输入图像数据。
+                可以是单个 NumPy 数组 (H, W) 或 (H, W, C)，
+                也可以是包含多个 NumPy 数组的列表。
+            raw (bool, optional): 如果为 True，则返回模型原始输出的边界框（未经过后处理）；
+                                  否则，边界框将被还原到原始图像坐标系。默认为 True。
+                                  注意：此处的 `raw` 参数传递给 `super().__call__`，
+                                  但 `process_detections` 始终处理还原后的坐标。
+
+        Returns:
+            np.ndarray: 经过区域合并和处理后的检测结果。
+                        形状为 `[len(self.areas), 5]`，其中 5 = (x1, y1, x2, y2, class)。
+                        如果某个区域没有检测到目标，其类别将为 -1。
+        Note:
+        此函数假设NMS内置于模型之中
         """
         raw_output = super().__call__(input_data, raw=raw)  # [batch, 300, 6]
 
@@ -133,14 +182,29 @@ class AreaAvgInference(YOLOInference):
 
 def process_detections(raw_output: np.ndarray, area_bounds: np.ndarray, confidence: float,
                        num_areas: int, class_num: int) -> np.ndarray:
-    """
-    处理已经过NMS的检测输出
-    :param raw_output: [batch, 300, 6] where 6 = (x1,y1,x2,y2,score,class)
-    :param area_bounds: [num_areas, 4] (start_x, start_y, end_x, end_y)
-    :param confidence: 置信度阈值
-    :param num_areas: 区域数量
-    :param class_num: 类别数量
-    :return: [num_areas, 5] (x1,y1,x2,y2,class) , class=-1表示无检测
+    """处理经过NMS的检测输出，并根据预定义区域进行加权平均和类别投票。
+
+    该函数将所有批次中置信度高于阈值的检测结果合并，然后根据每个检测框的中心点，
+    将其分配到对应的预定义区域。对于每个区域，它会计算落入该区域的所有检测框的
+    加权平均边界框，并通过加权投票确定该区域的主导类别。
+
+    Args:
+        raw_output (np.ndarray): 模型的原始检测输出，形状为 `[batch_size, max_detections, 6]`。
+                                 其中 6 = (x1, y1, x2, y2, score, class_id)。
+        area_bounds (np.ndarray): 预定义区域的边界坐标，形状为 `[num_areas, 4]`。
+                                  其中 4 = (start_x, start_y, end_x, end_y)。
+        confidence (float): 检测结果的置信度阈值。低于此阈值的检测将被忽略。
+        num_areas (int): 预定义区域的数量。
+        class_num (int): 模型输出的类别总数。用于类别投票时的 `minlength` 参数。
+
+    Returns:
+        np.ndarray: 经过处理后的检测结果，形状为 `[num_areas, 5]`。
+                    其中 5 = (x1, y1, x2, y2, class_id)。
+                    如果某个区域没有检测到目标，其 `class_id` 将为 -1。
+
+    Note:
+        此函数假设 `raw_output` 中的边界框坐标已经还原到原始图像尺寸，
+        或者至少是统一的坐标系，以便与 `area_bounds` 进行比较。
     """
     valid_mask = raw_output[:, :, 4] >= confidence
 
@@ -213,7 +277,7 @@ def process_detections(raw_output: np.ndarray, area_bounds: np.ndarray, confiden
 
 class NumCountInference(YOLOInference):
     def __init__(self,
-                 engine_path: str,
+                 model_path: str,
                  confidence: float = 0.5,
                  enable_trt_profile: bool = True,
                  max_batch_size: int = 5,
@@ -222,18 +286,27 @@ class NumCountInference(YOLOInference):
                  target_long_side: int = 640
                  ):
         """
-        Initialize the num cunt inference.
-        :param engine_path: Path to the ONNX engine file.
-        :param confidence: Confidence threshold for filtering detections.
-        :param enable_trt_profile: 是否启用 TensorRT 固定形状优化
-        :param max_batch_size: 预期的最大 Batch Size (仅在 enable_trt_profile=True 且模型输入动态时生效)
-        :param opt_batch_size: 预期的最优 Batch Size (仅在 enable_trt_profile=True 且模型输入动态时生效)
-        :param input_image_size: 摄像头/图片的原始分辨率 (Width, Height)。
-                                 如果传入此参数，会自动计算最佳的矩形输入尺寸 (Rectangular Inference)。
-                                 如果不传，默认使用 target_long_side 的正方形。
-        :param target_long_side: 预期的输入尺寸 (H, W) (仅在 enable_trt_profile=True 且模型输入动态时生效)
+        Args:
+            model_path (str): ONNX 模型文件的路径。
+            confidence (float, optional): 置信度阈值。默认为 0.5。
+            enable_trt_profile (bool, optional): 是否启用 TensorRT 动态形状配置文件生成。
+                如果为 True，将根据 batch size 和尺寸参数预热 TensorRT 引擎缓存，
+                该参数为True时无论是否提供input_image_size，fix_image为True。默认为 False。
+            max_batch_size (int, optional): 预期的最大 Batch Size。
+                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。默认为 5。
+            opt_batch_size (int, optional): 预期的最优 Batch Size。
+                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。默认为 5。
+            input_image_size (tuple[int, int] | None, optional): 原始输入图像的分辨率 (Width, Height)。
+                如果提供，将基于 `target_long_side` 计算最佳矩形推理尺寸 (Rectangular Inference)，此时fix_image为True。
+                如果不提供，默认使用 `target_long_side` 作为边长的正方形尺寸，此时fix_image为False。默认为 None。
+            target_long_side (int, optional): 预期的输入图像长边尺寸。
+                用于计算实际推理时的输入分辨率。默认为 640。
+
+        Raises:
+            FileNotFoundError: 如果 `model_path` 指定的文件不存在。
         """
-        super().__init__(model_path=engine_path,
+
+        super().__init__(model_path=model_path,
                          enable_trt_profile=enable_trt_profile,
                          max_batch_size=max_batch_size,
                          opt_batch_size=opt_batch_size,
@@ -242,15 +315,25 @@ class NumCountInference(YOLOInference):
                          )
         self.confidence = confidence
 
-    def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw=False) -> int:
-        """
-        对输入图片进行推理，并进行NMS和置信度过滤(模型包含NMS)。然后，计算出目标数量，该数量值为batch中数量值的众数
-        :param input_data: Input data for inference. input_data :list[batch_size, height, width, channels]
-        :return: num count
+    def __call__(self, input_data: list[np.ndarray] | np.ndarray) -> int:
+        """对输入图片进行推理，并进行NMS和置信度过滤，然后计算目标数量。
+
+        该方法首先对输入数据进行预处理，然后执行模型推理。
+        推理结果经过置信度过滤后，统计每个批次中检测到的目标数量。
+        如果批次大小为1，则直接返回该批次的目标数量。
+        如果批次大小大于1，则计算所有批次目标数量的众数作为最终结果。
+
+        Args:
+            input_data (list[np.ndarray] | np.ndarray): 输入图像数据。
+                可以是单个 NumPy 数组 (H, W) 或 (H, W, C)，
+                也可以是包含多个 NumPy 数组的列表。
+
+        Returns:
+            int: 检测到的目标数量的众数。
         """
 
         # Get raw inference output: [batch, 300, 6] where 6 = (x1,y1,x2,y2,score,class)
-        raw_output = super().__call__(input_data, raw=raw)
+        raw_output = super().__call__(input_data, raw=False)
 
         # 所有batch的钢坯数量计数
         confidence_mask = raw_output[:, :, 4] >= self.confidence  # [batch, 300]
