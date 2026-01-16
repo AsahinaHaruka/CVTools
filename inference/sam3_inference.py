@@ -23,7 +23,8 @@ class SAM3Inference(ONNXInference):
                  opt_batch_size: int = 1,
                  input_image_size: tuple[int, int] = None,
                  target_long_side: int = 640,
-                 other_size=(32, 32, 32)):
+                 other_size=(32, 32, 32),
+                 execution_provider: tuple[str] = ("trt", "cuda", "CoreML", "cpu")):
         """
         初始化 SAM3 推理会话。
 
@@ -55,6 +56,7 @@ class SAM3Inference(ONNXInference):
             other_size (tuple[int, int, int], optional): 非图像维度的动态输入尺寸配置 (min, opt, max)。
                 用于 TensorRT Profile 中非 Batch、非 Image (H/W) 的动态维度（如序列长度）。
                 默认为 (32, 32, 32)。
+            execution_provider (tuple[str], optional): 需要扫描的后端列表
 
         Raises:
             FileNotFoundError: 如果 `model_path` 指定的文件不存在。
@@ -66,7 +68,8 @@ class SAM3Inference(ONNXInference):
                          opt_batch_size=opt_batch_size,
                          input_image_size=input_image_size,
                          target_long_side=target_long_side,
-                         other_size=other_size
+                         other_size=other_size,
+                         execution_provider=execution_provider
                          )
 
         self.tokenizer = SimpleCLIPBPETokenizer(vocab_file=vocab_file,

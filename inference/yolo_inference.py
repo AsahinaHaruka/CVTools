@@ -18,7 +18,8 @@ class YOLOInference(ONNXInference):
                  max_batch_size: int = 5,
                  opt_batch_size: int = 5,
                  input_image_size: tuple[int, int] = None,
-                 target_long_side: int = 640):
+                 target_long_side: int = 640,
+                 execution_provider: tuple[str] = ("trt", "cuda", "CoreML", "cpu")):
         """初始化 YOLO 推理会话。
 
         加载 YOLO ONNX 模型并配置推理会话选项。支持 TensorRT 执行提供程序及其动态形状配置。
@@ -43,6 +44,7 @@ class YOLOInference(ONNXInference):
             target_long_side (int, optional): 预期的输入图像长边尺寸。
                 用于计算实际推理时的输入分辨率。
                 默认为 640。
+            execution_provider (tuple[str], optional): 需要扫描的后端列表
         """
         super().__init__(model_path=model_path,
                          stride=32,
@@ -50,7 +52,8 @@ class YOLOInference(ONNXInference):
                          max_batch_size=max_batch_size,
                          opt_batch_size=opt_batch_size,
                          input_image_size=input_image_size,
-                         target_long_side=target_long_side
+                         target_long_side=target_long_side,
+                         execution_provider=execution_provider
                          )
 
         self.image_processor = ImageProcessor(target_size=self.img_size,

@@ -36,7 +36,7 @@ class ONNXInference:
             input_image_size: tuple[int, int] | None = None,
             target_long_side: int = 640,
             other_size: tuple[int, int, int] = (0, 100, 200),
-            execution_provider: tuple[str] = ["trt", "cuda", "CoreML", "cpu"],
+            execution_provider: tuple[str] = ("trt", "cuda", "CoreML", "cpu"),
     ):
         """初始化 ONNX 推理会话。
 
@@ -62,7 +62,7 @@ class ONNXInference:
             other_size (tuple[int, int, int], optional): 非图像维度的动态输入尺寸配置 (min, opt, max)。
                 用于 TensorRT Profile 中非 Batch、非 Image (H/W) 的动态维度（如序列长度）。
                 默认为 (0, 100, 200)。
-            execution_provider(tuple[str], optional): 需要扫描的后端列表
+            execution_provider (tuple[str], optional): 需要扫描的后端列表
 
         Raises:
             FileNotFoundError: 如果 `model_path` 指定的文件不存在。
