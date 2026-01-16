@@ -26,15 +26,18 @@ DTYPE_MAPPING = {
 
 
 class ONNXInference:
-    def __init__(self,
-                 model_path: str,
-                 enable_trt_profile: bool = False,
-                 stride: int = 32,
-                 max_batch_size: int = 5,
-                 opt_batch_size: int = 5,
-                 input_image_size: tuple[int, int] | None = None,
-                 target_long_side: int = 640,
-                 other_size: tuple[int, int, int] = (0, 100, 200)):
+    def __init__(
+            self,
+            model_path: str,
+            enable_trt_profile: bool = False,
+            stride: int = 32,
+            max_batch_size: int = 5,
+            opt_batch_size: int = 5,
+            input_image_size: tuple[int, int] | None = None,
+            target_long_side: int = 640,
+            other_size: tuple[int, int, int] = (0, 100, 200),
+            execution_provider: tuple[str] = ["trt", "cuda", "CoreML", "cpu"],
+    ):
         """初始化 ONNX 推理会话。
 
         加载 ONNX 模型并配置推理会话选项。支持 TensorRT 执行提供程序及其动态形状配置。
@@ -59,6 +62,7 @@ class ONNXInference:
             other_size (tuple[int, int, int], optional): 非图像维度的动态输入尺寸配置 (min, opt, max)。
                 用于 TensorRT Profile 中非 Batch、非 Image (H/W) 的动态维度（如序列长度）。
                 默认为 (0, 100, 200)。
+            execution_provider(tuple[str], optional): 需要扫描的后端列表
 
         Raises:
             FileNotFoundError: 如果 `model_path` 指定的文件不存在。
@@ -69,7 +73,7 @@ class ONNXInference:
         self.opt_batch_size = opt_batch_size
         self.target_long_side = target_long_side
 
-        self.fix_image=False
+        self.fix_image = False
 
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"Model not found: {model_path}")
@@ -82,7 +86,7 @@ class ONNXInference:
         if fixed_h is not None and fixed_w is not None:
             #  如果模型尺寸固定，强制使用模型尺寸
             self.img_size = (fixed_h, fixed_w)
-            self.fix_image=True
+            self.fix_image = True
 
             print(f"ℹ️ [Init] 检测到模型图像输入尺寸固定，强制使用固定图像输入: {self.img_size}")
 
@@ -102,7 +106,7 @@ class ONNXInference:
 
         if enable_trt_profile:
             trt_profile_options = self._build_trt_profile(other_size)
-            self.fix_image=True
+            self.fix_image = True
 
             if trt_profile_options:
                 if trt_profile_options:
@@ -119,15 +123,41 @@ class ONNXInference:
             os.makedirs(cache_dir, exist_ok=True)
 
             trt_provider_options.update({
-                'trt_engine_cache_enable': True,
-                'trt_engine_cache_path': cache_dir,
+                "trt_engine_cache_enable": True,
+                "trt_engine_cache_path": cache_dir,
             })
 
-        providers = [
-            ('TensorrtExecutionProvider', trt_provider_options),
-            'CUDAExecutionProvider',
-            'CPUExecutionProvider'
-        ]
+        available_providers = ort.get_available_providers()
+        print(f"ℹ️ [Init] 系统当前可用后端: {available_providers}")
+        providers = []
+        # TensorRT
+        if "trt" in execution_provider and "TensorrtExecutionProvider" in available_providers:
+            # 只有当环境支持 TRT 时，才传入配置好的 trt_provider_options
+            providers.append(("TensorrtExecutionProvider", trt_provider_options))
+
+        #  CUDA
+        if "cuda" in execution_provider and "CUDAExecutionProvider" in available_providers:
+            providers.append("CUDAExecutionProvider")
+
+        # CoreML
+        if (
+                "CoreML" in execution_provider
+                and "CoreMLExecutionProvider" in available_providers
+        ):
+            providers.append((
+                "CoreMLExecutionProvider",
+                {
+                    "ModelFormat": "MLProgram",
+                    "MLComputeUnits": "ALL",
+                    "RequireStaticInputShapes": "1",
+                    "EnableOnSubgraphs": "0",
+                },
+            )
+            )
+
+        # CPU
+        if "cpu" in execution_provider and "CPUExecutionProvider" in available_providers:
+            providers.append("CPUExecutionProvider")
 
         # 3. 创建正式的推理 Session
         session_options = ort.SessionOptions()
@@ -170,7 +200,7 @@ class ONNXInference:
                     return h, w
         return None, None
 
-    def _get_inference_size(self,target_long: int, stride: int, input_wh: tuple[int, int] = None) -> tuple[int, int]:
+    def _get_inference_size(self, target_long: int, stride: int, input_wh: tuple[int, int] = None) -> tuple[int, int]:
         """
         统一计算推理尺寸，并强制执行 Stride 对齐检查。
 
@@ -188,7 +218,7 @@ class ONNXInference:
         """
         if input_wh is not None:
             # 矩形推理 (根据原图比例计算)
-            self.fix_image=True
+            self.fix_image = True
             w, h = input_wh
             scale = target_long / max(w, h)
             # 初步计算缩放后的尺寸
