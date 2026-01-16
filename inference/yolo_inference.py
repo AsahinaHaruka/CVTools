@@ -84,7 +84,7 @@ class YOLOInference(ONNXInference):
 
         # 执行推理
         outputs = super().__call__(processed_input)[0].astype(np.float32)
-        return self.image_processor.convert_to_original_coords(outputs, transform_params) if raw else outputs
+        return  outputs if raw else  self.image_processor.convert_to_original_coords(outputs, transform_params)
 
 
 
@@ -149,7 +149,7 @@ class AreaAvgInference(YOLOInference):
         self.areas = np.array([[area.start_x, area.start_y, area.end_x, area.end_y] for area in areas],
                               dtype=np.float32)
 
-    def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw=True) -> np.ndarray:
+    def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw=False) -> np.ndarray:
         """对输入图片进行推理，然后根据预定义区域进行结果合并。
 
         该方法首先调用父类的 `__call__` 方法获取原始的检测结果。
@@ -333,7 +333,7 @@ class NumCountInference(YOLOInference):
         """
 
         # Get raw inference output: [batch, 300, 6] where 6 = (x1,y1,x2,y2,score,class)
-        raw_output = super().__call__(input_data, raw=False)
+        raw_output = super().__call__(input_data, raw=True)
 
         # 所有batch的钢坯数量计数
         confidence_mask = raw_output[:, :, 4] >= self.confidence  # [batch, 300]

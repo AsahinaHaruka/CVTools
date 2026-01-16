@@ -110,8 +110,8 @@ class SAM3Inference(ONNXInference):
                                                   如果 `raw` 为 True，则为模型输出坐标；
                                                   否则为原始图像坐标。
                 - 'masks' (list[np.ndarray], optional): 分割掩码列表。
-                                                       如果 `raw` 为 True，则为模型输出尺寸的掩码；
-                                                       否则为还原到原始图像尺寸的二值掩码。
+                                                       如果 `raw` 为 True，则为模型输出掩码；
+                                                       否则为还原到原始图像尺寸的二值掩码(0/255)。
 
         Raises:
             ValueError: 如果 `input_data` 格式不符合预期或模型输入数量不匹配。
