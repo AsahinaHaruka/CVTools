@@ -3,12 +3,14 @@ Author: Haruka
 Date: 2026-01-15 15:19:47
 LastEditors: Haruka
 LastEditTime: 2026-01-16 10:19:40
-FilePath: logger.py
+FilePath: /road/uilt/logger.py
 """
+
 import logging
 import os
 import sys
 import multiprocessing
+import multiprocessing.queues
 from logging.handlers import (
     RotatingFileHandler,
     TimedRotatingFileHandler,
@@ -16,10 +18,12 @@ from logging.handlers import (
     QueueListener,
 )
 
+
 class ColoredFormatter(logging.Formatter):
     """
     用于控制台输出的带颜色日志格式化器
     """
+
     # ANSI 颜色代码
     GREY = "\x1b[38;20m"
     GREEN = "\x1b[32;20m"
@@ -37,7 +41,7 @@ class ColoredFormatter(logging.Formatter):
         logging.CRITICAL: BOLD_RED,
     }
 
-    def __init__(self, fmt:str|None=None, datefmt:str|None=None):
+    def __init__(self, fmt: str | None = None, datefmt: str | None = None):
         """
         初始化 ColoredFormatter。
 
@@ -62,11 +66,11 @@ class ColoredFormatter(logging.Formatter):
 
         original_fmt = self._fmt
 
-
         formatter = logging.Formatter(log_fmt + original_fmt + self.RESET)
 
         # 3. 使用修改后的格式化器
         return formatter.format(record)
+
 
 class LoggerBuilder:
     """
@@ -74,7 +78,8 @@ class LoggerBuilder:
     负责具体的 Handler 创建和 Formatter 配置
     """
 
-    DEFAULT_FORMAT = "%(asctime)s | %(levelname)-8s | %(processName)s:%(process)d | %(filename)s:%(lineno)d | %(message)s"
+    DEBUG_FORMAT= "%(asctime)s | %(levelname)-8s | %(processName)s:%(process)d | %(filename)s:%(lineno)d | %(message)s"
+    DEFAULT_FORMAT= "%(asctime)s | %(levelname)-8s | %(processName)s:%(process)d | %(message)s"
 
     @staticmethod
     def _create_handlers(
@@ -86,16 +91,19 @@ class LoggerBuilder:
         backup_count: int,
         when: str,
         interval: int,
-        delay:bool
+        delay: bool,
+        format:str=DEFAULT_FORMAT,
     ) -> list[logging.Handler]:
         """内部方法：创建 Handler 列表"""
         handlers = []
-        formatter = logging.Formatter(LoggerBuilder.DEFAULT_FORMAT)
+        formatter = logging.Formatter(format)
 
         # 1. 控制台 Handler
         if console_output:
             console_handler = logging.StreamHandler(sys.stdout)
-            console_handler.setFormatter(ColoredFormatter(fmt=LoggerBuilder.DEFAULT_FORMAT))
+            console_handler.setFormatter(
+                ColoredFormatter(fmt=format)
+            )
             handlers.append(console_handler)
 
         # 2. 文件 Handler
@@ -111,7 +119,7 @@ class LoggerBuilder:
                     maxBytes=max_bytes,
                     backupCount=backup_count,
                     encoding="utf-8",
-                    delay=delay
+                    delay=delay,
                 )
             elif file_rotation == "time":
                 file_handler = TimedRotatingFileHandler(
@@ -120,10 +128,12 @@ class LoggerBuilder:
                     interval=interval,
                     backupCount=backup_count,
                     encoding="utf-8",
-                    delay=delay
+                    delay=delay,
                 )
             elif file_rotation == "none":
-                file_handler = logging.FileHandler(file_path,delay=delay,encoding="utf-8")
+                file_handler = logging.FileHandler(
+                    file_path, delay=delay, encoding="utf-8"
+                )
 
             if file_handler:
                 file_handler.setFormatter(formatter)
@@ -136,14 +146,14 @@ class LoggerBuilder:
         name: str = "root",
         level: int = logging.INFO,
         log_dir: str = "logs",
-        log_filename: str = "app.log",
+        log_filename: str| None = None,
         console_output: bool = True,
         file_rotation: str = "size",  # 选项: 'size', 'time', 'none'
         max_bytes: int = 10 * 1024 * 1024,  # 10MB
         backup_count: int = 5,
         when: str = "midnight",
         interval: int = 1,
-        delay:bool=False
+        delay: bool = False,
     ) -> logging.Logger:
         """
         获取一个配置好的 `logging.Logger` 实例，用于单进程日志记录。
@@ -155,7 +165,7 @@ class LoggerBuilder:
             name (str): Logger 的名称。默认为 "root"。
             level (int): 日志记录的最低级别。例如 `logging.INFO`。默认为 `logging.INFO`。
             log_dir (str): 日志文件存储的目录。默认为 "logs"。
-            log_filename (str | None): 日志文件的名称。如果为 `None`，则不输出到文件。默认为 "app.log"。
+            log_filename (str | None): 日志文件的名称。如果为 `None`，则不输出到文件。默认为 `None`。
             console_output (bool): 是否将日志输出到控制台。默认为 `True`。
             file_rotation (str): 文件轮转策略。可选值包括 "size" (按大小轮转), "time" (按时间轮转), "none" (不轮转)。默认为 "size"。
             max_bytes (int): 当 `file_rotation` 为 "size" 时，单个日志文件的最大字节数。默认为 10MB。
@@ -173,6 +183,12 @@ class LoggerBuilder:
         logger = logging.getLogger(name)
         logger.setLevel(level)
 
+        if level==logging.DEBUG:
+            format=LoggerBuilder.DEBUG_FORMAT
+        else:
+            format=LoggerBuilder.DEFAULT_FORMAT
+
+
         # 防止重复添加 Handler
         if not logger.handlers:
             handlers = LoggerBuilder._create_handlers(
@@ -184,13 +200,17 @@ class LoggerBuilder:
                 backup_count=backup_count,
                 when=when,
                 interval=interval,
-                delay=delay
+                delay=delay,
+                format=format
             )
             for h in handlers:
                 logger.addHandler(h)
         return logger
 
+
 _GLOBAL_LOG_QUEUE = None
+_WORKER_LOG_QUEUE = None
+
 
 class MultiProcessLogManager:
     """
@@ -208,7 +228,7 @@ class MultiProcessLogManager:
         backup_count: int = 5,
         when: str = "midnight",
         interval: int = 1,
-        delay:bool=False
+        delay: bool = False,
     ) -> tuple[multiprocessing.Queue, QueueListener]:
         """
         【主进程调用】初始化队列监听器。
@@ -256,33 +276,36 @@ class MultiProcessLogManager:
 
         root = logging.getLogger()
         root.setLevel(level)
+        if level==logging.DEBUG:
+            _format=LoggerBuilder.DEBUG_FORMAT
+        else:
+            _format=LoggerBuilder.DEFAULT_FORMAT
         handlers = []
 
-       # 检查 Root Logger 是否已经有 Handler (比如之前调用过 LoggerBuilder)
+        # 检查并清理 Root Logger 的现有 Handler
         if root.handlers:
-            print(f"[LogManager] 检测到主进程已有 {len(root.handlers)} 个 Handler，正在接管并移动到监听器...")
+            print(f"[LogManager] 警告: 检测到主进程已有 {len(root.handlers)} 个 Handler。")
+            print(f"[LogManager] 现有 Handler 为: {root.handlers}")
+            print("[LogManager] 为防止日志重复或格式冲突，正在清理旧 Handler，完全使用 LogManager 配置...")
 
-            # 复制引用
-            handlers = root.handlers[:]
-            # 清空主进程的 Handler，防止主进程直接写文件
+            # 直接清空，而不是复制
             root.handlers = []
-        else:
-            # 如果没有，则按参数创建新的
-            handlers = LoggerBuilder._create_handlers(
-                log_dir=log_dir,
-                log_filename=log_filename,
-                console_output=console_output,
-                file_rotation=file_rotation,
-                max_bytes=max_bytes,
-                backup_count=backup_count,
-                when=when,
-                interval=interval,
-                delay=delay
-            )
+
+        handlers = LoggerBuilder._create_handlers(
+            log_dir=log_dir,
+            log_filename=log_filename,
+            console_output=console_output,
+            file_rotation=file_rotation,
+            max_bytes=max_bytes,
+            backup_count=backup_count,
+            when=when,
+            interval=interval,
+            delay=delay,
+            format=_format
+        )
 
         # 启动监听器
         listener = QueueListener(queue, *handlers)
-        listener.start()
 
         # 配置主进程
         q_handler = QueueHandler(queue)
@@ -291,7 +314,9 @@ class MultiProcessLogManager:
         return queue, listener
 
     @staticmethod
-    def configure_worker(queue: multiprocessing.Queue| None = None, level: int = logging.INFO) -> None:
+    def configure_worker(
+        queue: multiprocessing.queues.Queue | None = None, level: int = logging.INFO
+    ) -> None:
         """
         【子进程调用】配置当前进程的日志发送端。
 
@@ -321,8 +346,19 @@ class MultiProcessLogManager:
                 "1. (Linux) 确保在 fork 子进程前已调用 init_main_listener。\n"
                 "2. (Windows/macOS) 由于使用 spawn 模式，无法共享全局变量，你必须显式传入 queue 参数。"
             )
-        h = QueueHandler(queue)
+        global _WORKER_LOG_QUEUE
+        _WORKER_LOG_QUEUE = target_queue
+
+        h = QueueHandler(target_queue)
         root = logging.getLogger()
         root.handlers = []
         root.addHandler(h)
         root.setLevel(level)
+
+    @staticmethod
+    def get_log_queue() -> multiprocessing.Queue:
+        """【子进程】获取当前进程持有的日志队列"""
+        global _WORKER_LOG_QUEUE
+        if _WORKER_LOG_QUEUE is None:
+            raise RuntimeError("日志队列未初始化！请先调用 configure_worker。")
+        return _WORKER_LOG_QUEUE
