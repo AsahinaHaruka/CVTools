@@ -9,9 +9,12 @@ import os
 import argparse
 import cv2
 import numpy as np
-from inference.yolo_inference import YOLOInference
+from inference.yolo_inference import YoloObjInference
 from tqdm import tqdm
 
+from ulit.logger import LoggerBuilder
+
+logger = LoggerBuilder().get_logger(name="data_split")
 
 def draw_detections(image, detections, conf_threshold=0.5):
     """
@@ -53,9 +56,9 @@ def draw_detections(image, detections, conf_threshold=0.5):
 def main(args):
     """主函数，执行推理、绘制和保存."""
     # 1. 初始化推理引擎
-    print("Initializing inference engine...")
-    inference_engine = YOLOInference(args.model)
-    print("Engine initialized.")
+    logger.info("Initializing inference engine...")
+    inference_engine = YoloObjInference(args.model)
+    logger.info("Engine initialized.")
 
     # 2. 准备输入输出目录
     os.makedirs(args.output, exist_ok=True)
@@ -63,7 +66,7 @@ def main(args):
     image_files = [f for f in os.listdir(args.input) if f.lower().endswith(image_extensions)]
 
     if not image_files:
-        print(f"No images found in {args.input}")
+        logger.error(f"No images found in {args.input}")
         return
 
     # 3. 遍历图片进行处理
@@ -71,7 +74,7 @@ def main(args):
         image_path = os.path.join(args.input, image_file)
         image = cv2.imread(image_path)
         if image is None:
-            print(f"Warning: Could not read image {image_file}. Skipping.")
+            logger.warning(f"Warning: Could not read image {image_file}. Skipping.")
             continue
 
         # 执行推理
@@ -84,7 +87,7 @@ def main(args):
         output_path = os.path.join(args.output, image_file)
         cv2.imwrite(output_path, annotated_image)
 
-    print(f"\nInference complete. Annotated images are saved in '{args.output}'.")
+    logger.info(f"Inference complete. Annotated images are saved in '{args.output}'.")
 
 
 if __name__ == '__main__':

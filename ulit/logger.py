@@ -221,7 +221,7 @@ class MultiProcessLogManager:
     def init_main_listener(
         level: int = logging.INFO,
         log_dir: str = "logs",
-        log_filename: str = "app.log",
+        log_filename: str = None,
         console_output: bool = True,
         file_rotation: str = "size",  # 选项: 'size', 'time', 'none'
         max_bytes: int = 10 * 1024 * 1024,
@@ -357,7 +357,18 @@ class MultiProcessLogManager:
 
     @staticmethod
     def get_log_queue() -> multiprocessing.Queue:
-        """【子进程】获取当前进程持有的日志队列"""
+        """
+        【子进程调用】获取当前进程持有的日志队列。
+
+        此方法允许子进程获取其配置的 `multiprocessing.Queue` 实例，
+        以便直接与主进程的日志监听器进行通信（尽管通常通过 `logging` 模块的 API 间接完成）。
+
+        Returns:
+            multiprocessing.Queue: 当前子进程用于发送日志消息的队列。
+
+        Raises:
+            RuntimeError: 如果在调用 `configure_worker` 之前尝试获取日志队列。
+        """
         global _WORKER_LOG_QUEUE
         if _WORKER_LOG_QUEUE is None:
             raise RuntimeError("日志队列未初始化！请先调用 configure_worker。")

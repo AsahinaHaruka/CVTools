@@ -13,6 +13,10 @@ import numpy as np
 
 import cv2
 
+from ulit.logger import LoggerBuilder
+
+logger = LoggerBuilder().get_logger(name="data_split")
+
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"}
 
 
@@ -76,7 +80,7 @@ def to_gray(in_path: Path, out_path: Path, overwrite: bool) -> bool:
             raise ValueError("保存失败")
         return True
     except Exception as e:
-        print(f"[错误] 转换失败: {in_path} -> {out_path} ({e})", file=sys.stderr)
+        logger.error(f"[错误] 转换失败: {in_path} -> {out_path} ({e})")
         return False
 
 
@@ -86,18 +90,18 @@ def main() -> None:
     dst = Path(args.output)
 
     if not src.exists() or not src.is_dir():
-        print(f"[错误] 输入目录不存在或不可用: {src}", file=sys.stderr)
+        logger.error(f"[错误] 输入目录不存在或不可用: {src}")
         sys.exit(1)
 
     if is_subpath(dst, src):
-        print(f"[错误] 输出目录 `{dst}` 不可位于输入目录 `{src}` 内，请选择不同位置。", file=sys.stderr)
+        logger.error(f"[错误] 输出目录 `{dst}` 不可位于输入目录 `{src}` 内，请选择不同位置。")
         sys.exit(1)
 
     dst.mkdir(parents=True, exist_ok=True)
 
     files: List[Path] = list(list_images(src, args.recursive))
     if not files:
-        print("[提示] 未找到待处理的图片文件。")
+        logger.warning("[提示] 未找到待处理的图片文件。")
         return
 
     converted = 0
@@ -110,7 +114,7 @@ def main() -> None:
         else:
             skipped += 1
 
-    print(f"[完成] 共发现 {len(files)} 张图片，转换 {converted}，跳过 {skipped}。输出目录: {dst}")
+    logger.info(f"[完成] 共发现 {len(files)} 张图片，转换 {converted}，跳过 {skipped}。输出目录: {dst}")
 
 
 if __name__ == "__main__":

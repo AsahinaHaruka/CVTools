@@ -16,6 +16,9 @@ import multiprocessing
 from tqdm import tqdm
 
 from ulit.perspective_transformation import PerspectiveTransformer
+from ulit.logger import LoggerBuilder
+
+logger = LoggerBuilder().get_logger(name="data_split")
 
 VIDEO_EXTENSIONS = {'.mp4', '.mov', '.avi', '.mkv', '.flv', '.wmv', '.webm', '.dav'}
 
@@ -200,7 +203,7 @@ def process_videos(video_dir: str, output_dir: str, enable_perspective: bool = F
             worker_id = 0
             for vf in video_files:
                 if os.path.splitext(vf)[0] in have_processed:
-                    print(f"跳过已处理：{vf}")
+                    logger.info(f"跳过已处理：{vf}")
                     continue
                 video_path = os.path.join(video_dir, vf)
                 cfg = prepare_perspective_for_video(video_path, points_cache, output_size)
@@ -217,15 +220,15 @@ def process_videos(video_dir: str, output_dir: str, enable_perspective: bool = F
                 with open(cache_path, "w", encoding="utf-8") as fw:
                     json.dump(points_cache, fw, ensure_ascii=False, indent=2)
             except Exception as e:
-                print(f"⚠️ 写入缓存失败: {e}")
+                logger.warning(f"⚠️ 写入缓存失败: {e}")
 
         except Exception as e:
-            print(f"❌ 任务处理出错 -> {e}")
+            logger.error(f"❌ 任务处理出错 -> {e}")
 
-        print("\n>>>🚀 所有点选完成，后台处理中... (请勿关闭窗口)\n")
+        logger.info("\n>>>🚀 所有点选完成，后台处理中... (请勿关闭窗口)\n")
         pool.close()
         pool.join()
-        print("\n所有处理已完成。")
+        logger.info("\n所有处理已完成。")
 
     else:
         pool = multiprocessing.Pool(
@@ -267,10 +270,10 @@ if __name__ == "__main__":
 
     if os.name == 'nt':
         if any('\u4e00' <= ch <= '\u9fff' for ch in args.output):
-            sys.stderr.write('⚠️ 警告：输出目录包含中文，建议使用英文路径\n')
+            logger.warning('⚠️ 警告：输出目录包含中文，建议使用英文路径\n')
 
     process_videos(args.input, args.output,
                    enable_perspective=args.perspective,
                    output_size=tuple(args.output_size) if args.output_size else None)
 
-    print("\nFrame extraction completed.")
+    logger.info("Frame extraction completed.")
