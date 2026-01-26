@@ -4,7 +4,7 @@
 
 ## 文件说明
 
-* [inference.py](inference.py): 用于ONNX模型推理的脚本(包含推理、区域平均的推理、计数推理)。
+* [inference.py](inferencesss.py): 用于ONNX模型推理的脚本(包含推理、区域平均的推理、计数推理)。
 * [video2image.py](video2image.py): 将视频文件转换为图像序列,包含选点和透视变换
 * [color_to_gray.py](color_to_gray.py): 将彩色图像转换为灰度图。
 * [random_selection.py](random_selection.py): 从目录中随机选择一部分文件。
@@ -41,7 +41,7 @@ This is a collection of scripts for common computer vision tasks.
 
 ## File Descriptions
 
-* [inference.py](inference.py): Script for ONNX model inference (includes inference, region average inference, and
+* [inference.py](inferencesss.py): Script for ONNX model inference (includes inference, region average inference, and
   counting inference).
 * [video2image.py](video2image.py): Converts a video file into an image sequence, including point selection and
   perspective transformation.

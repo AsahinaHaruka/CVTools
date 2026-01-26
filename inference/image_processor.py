@@ -222,119 +222,72 @@ class ImageProcessor:
         return input_tensor.astype(self.dtype), transform_params
 
     @staticmethod
-    def convert_to_original_coords(detections: np.ndarray, transform_params: list) -> np.ndarray:
+    def restore_boxes(detections: np.ndarray,
+                      transform_params: list[dict],
+                      input_shape: tuple[int, int] | None = None,
+                      box_format: str = 'xyxy') -> np.ndarray:
         """
-        将检测结果从模型输出坐标系转换回原始图像坐标系（YOLO系列）。
-
-        此方法用于在模型推理后，将检测到的边界框坐标从经过 Letterbox 处理后的图像尺寸
-        还原到原始输入图像的尺寸。
-
+        将检测框坐标还原到原始图像坐标系（通用版）。
         Args:
-            detections (np.ndarray): 模型输出的检测结果，形状为 `[batch, max_detections, output_dim]`。
-                                     其中 `output_dim` 至少包含 `(x1, y1, x2, y2, score, ...)`。
-                                     假设第5列（索引为4）是置信度分数，用于过滤无效检测。
-            transform_params (list[dict]): 包含每个图像预处理时使用的变换参数的字典列表。
-                                           每个字典应包含 'scale' (缩放比例) 和 'padding' (左上角填充量)。
+            detections (np.ndarray): 模型的输出结果，形状为 (Batch, Num_Queries, D)。
+                D >= 4，前 4 列必须是坐标 (x, y, x, y) 或 (cx, cy, w, h)。
+                如果是单纯的 boxes，D=4；如果是包含置信度的结果，D>4，该函数只修改前 4 列。
+            transform_params (list[dict]): 包含每个图像预处理参数的列表 (scale, padding)。
+            input_shape (tuple[int, int] | None): 模型输入的 (height, width)。
+                如果提供且坐标最大值 <= 1.5，则会自动执行反归一化。
+            box_format (str): 输入坐标的格式，'xyxy' 或 'cxcywh'。默认为 'xyxy'。
+
         Returns:
-            np.ndarray: 转换回原始图像坐标系后的检测结果，形状与 `detections` 相同。
+            np.ndarray: 还原后的结果，形状与输入相同。坐标部分已转换为原始图像坐标且格式统一为 'xyxy'。
         """
-        batch_size = detections.shape[0]
+        # 避免修改原数据
         result = detections.copy()
 
-        for i in range(batch_size):
-            valid_mask = detections[i, :, 4] > 0  # 假设第5列是置信度分数
-
-            if not np.any(valid_mask):
-                continue  # 如果没有有效检测，跳过当前batch
-
-            # 获取当前图像的变换参数
-            params = transform_params[i]
-            r = params['scale']  # 缩放比例
-            pad_w, pad_h = params['padding']  # 填充量
-
-            # 提取检测框坐标并转换
-            valid_boxes = result[i, valid_mask, :4]  # (x, y, x, y)
-
-            # 坐标转换：减去填充再除以缩放比例
-            valid_boxes[:, 0] = (valid_boxes[:, 0] - pad_w) / r  # x1
-            valid_boxes[:, 1] = (valid_boxes[:, 1] - pad_h) / r  # y1
-            valid_boxes[:, 2] = (valid_boxes[:, 2] - pad_w) / r  # x2
-            valid_boxes[:, 3] = (valid_boxes[:, 3] - pad_h) / r  # y2
-
-            # 更新结果
-            result[i, valid_mask, :4] = valid_boxes
-
-        return result
-
-    @staticmethod
-    def convert_normalized_boxes(boxes: np.ndarray,
-                                 transform_params: list,
-                                 input_shape: tuple[int, int],
-                                 box_format: str = 'xyxy') -> np.ndarray:
-        """
-        将归一化后的边界框坐标转换回原始图像坐标系。
-
-        此方法处理以下转换步骤：
-        1. **反归一化**: 如果边界框坐标是 [0, 1] 范围内的归一化值，则将其乘以模型的输入尺寸 (model_w, model_h)。
-           通过检查坐标的最大值（如果小于等于 1.5，则认为是归一化数据）来自动判断。
-        2. **格式转换**: 如果 `box_format` 为 'cxcywh' (中心点坐标和宽高)，则将其转换为 'xyxy' (左上角和右下角坐标)。
-        3. **还原到原图**: 减去 Letterbox 预处理时添加的填充 (padding)，然后除以缩放比例 (scale)，
-           将坐标从 Letterbox 图像尺寸还原到原始图像尺寸。
-
-        Args:
-            boxes (np.ndarray): 模型的输出边界框，形状为 `(batch_size, num_boxes, 4)`。
-                                坐标可以是归一化的 (0-1) 或非归一化的，格式可以是 'xyxy' 或 'cxcywh'。
-            transform_params (list[dict]): 包含每个图像预处理时使用的变换参数的字典列表。
-                                           每个字典应包含 'scale' (缩放比例) 和 'padding' (左上角填充量)。
-            input_shape (tuple[int, int]): 模型输入的图像尺寸，格式为 (height, width)。
-                                           用于反归一化步骤。
-            box_format (str, optional): 输入边界框的格式。可选 'xyxy' 或 'cxcywh'。默认为 'xyxy'。
-
-        Returns:
-            np.ndarray: 转换回原始图像坐标系且为 'xyxy' 格式的边界框，形状与 `boxes` 相同。
-
-        Raises:
-            ValueError: 如果 `box_format` 不是 'xyxy' 或 'cxcywh'。
-
-        """
-        result = boxes.copy()
+        # 获取 batch size
         batch_size = result.shape[0]
-        model_h, model_w = input_shape
 
-        # --- 调试：打印第一个有效的框来看看 ---
-        # print(f"DEBUG Raw Box sample: {result[0, 0]}")
+        # ---------------------------------------------------------
+        # 1. 自动反归一化 (Normalize Check)
+        # ---------------------------------------------------------
+        # 检查前4列的最大值。如果 <= 1.5 且提供了 input_shape，说明是 0-1 归一化数据
+        if input_shape is not None and result[..., :4].max() <= 1.5:
+            h, w = input_shape
+            result[..., 0] *= w  # x or cx
+            result[..., 1] *= h  # y or cy
+            result[..., 2] *= w  # x or w
+            result[..., 3] *= h  # y or h
 
-        # 1. 自动判断是否需要反归一化 (Normalize Check)
-        # 如果最大值 <= 1.5，说明是 0-1 归一化数据，需要乘上 Input Size
-        if result.size > 0 and result.max() <= 1.5:
-            result[..., 0] *= model_w
-            result[..., 2] *= model_w
-            result[..., 1] *= model_h
-            result[..., 3] *= model_h
-
-        # 2. 格式转换逻辑
-        # 只有当它是 cxcywh 时，才需要转换成 xyxy
-        # 如果模型输出本身就是 xyxy，则跳过此步
+        # ---------------------------------------------------------
+        # 2. 格式转换 (cxcywh -> xyxy)
+        # ---------------------------------------------------------
         if box_format == 'cxcywh':
             cx, cy, w, h = result[..., 0], result[..., 1], result[..., 2], result[..., 3]
-            result[..., 0] = cx - 0.5 * w  # x1
-            result[..., 1] = cy - 0.5 * h  # y1
-            result[..., 2] = cx + 0.5 * w  # x2
-            result[..., 3] = cy + 0.5 * h  # y2
+            # 这里使用临时变量，避免原地修改导致计算错误
+            x1 = cx - 0.5 * w
+            y1 = cy - 0.5 * h
+            x2 = cx + 0.5 * w
+            y2 = cy + 0.5 * h
 
-        # 3. 还原到原图 (Padding & Scale)
+            result[..., 0], result[..., 1], result[..., 2], result[..., 3] = x1, y1, x2, y2
+
+        # ---------------------------------------------------------
+        # 3. 还原 Letterbox (去除 Padding 并除以 Scale)
+        # ---------------------------------------------------------
         for i in range(batch_size):
             params = transform_params[i]
             scale = params['scale']
             pad_left, pad_top = params['padding']
 
-            # 减去 Padding
-            result[i, :, 0] -= pad_left  # x1
-            result[i, :, 1] -= pad_top  # y1
-            result[i, :, 2] -= pad_left  # x2
-            result[i, :, 3] -= pad_top  # y2
+            # 针对该 batch 的所有框进行操作
+            # x1, x2 减去 pad_left
+            result[i, :, 0] -= pad_left
+            result[i, :, 2] -= pad_left
 
-            # 除以缩放比例
+            # y1, y2 减去 pad_top
+            result[i, :, 1] -= pad_top
+            result[i, :, 3] -= pad_top
+
+            # 全部除以 scale
             result[i, :, :4] /= scale
 
         return result

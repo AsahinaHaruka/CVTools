@@ -11,7 +11,7 @@ from .image_processor import ImageProcessor
 from ulit.data_define import Area
 
 
-class YOLOInference(ONNXInference):
+class YoloObjInference(ONNXInference):
     def __init__(self,
                  model_path: str,
                  enable_trt_profile: bool = False,
@@ -64,7 +64,7 @@ class YOLOInference(ONNXInference):
 
 
 
-    def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw=True) -> np.ndarray:
+    def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw=False) -> np.ndarray:
         """执行 YOLO 模型的推理。
 
         该方法首先对输入图像数据进行预处理，然后将处理后的图像输入模型进行推理。
@@ -87,7 +87,7 @@ class YOLOInference(ONNXInference):
 
         # 执行推理
         outputs = super().__call__(processed_input)[0].astype(np.float32)
-        return  outputs if raw else  self.image_processor.convert_to_original_coords(outputs, transform_params)
+        return  outputs if raw else  self.image_processor.restore_boxes(outputs, transform_params)
 
 
 
@@ -106,7 +106,7 @@ class YOLOInference(ONNXInference):
         return False
 
 
-class AreaAvgInference(YOLOInference):
+class AreaAvgInference(YoloObjInference):
     def __init__(self,
                  model_path: str,
                  areas: list[Area],
@@ -278,7 +278,7 @@ def process_detections(raw_output: np.ndarray, area_bounds: np.ndarray, confiden
     return result
 
 
-class NumCountInference(YOLOInference):
+class NumCountInference(YoloObjInference):
     def __init__(self,
                  model_path: str,
                  confidence: float = 0.5,

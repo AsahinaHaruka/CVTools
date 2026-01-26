@@ -63,7 +63,7 @@ class SAM3Inference(ONNXInference):
         """
         super().__init__(model_path=model_path,
                          stride=14,
-                         enable_trt_profile=enable_trt_profile, # 这里的 enable_trt_profile 应该直接传递
+                         enable_trt_profile=enable_trt_profile,  # 这里的 enable_trt_profile 应该直接传递
                          max_batch_size=max_batch_size,
                          opt_batch_size=opt_batch_size,
                          input_image_size=input_image_size,
@@ -133,12 +133,12 @@ class SAM3Inference(ONNXInference):
 
         res = {'scores': outputs[2]}
         if return_boxes:
-            res['boxes'] = outputs[1] if raw else self.image_processor.convert_normalized_boxes(outputs[1],
-                                                                                                transform_params,
-                                                                                                input_shape=(
-                                                                                                    self.image_processor.target_h,
-                                                                                                    self.image_processor.target_w),
-                                                                                                box_format='xyxy')
+            res['boxes'] = outputs[1] if raw else self.image_processor.restore_boxes(outputs[1],
+                                                                                     transform_params,
+                                                                                     input_shape=(
+                                                                                         self.image_processor.target_h,
+                                                                                         self.image_processor.target_w),
+                                                                                     box_format='xyxy')
         if return_masks:
             res['masks'] = outputs[0] if raw else self.image_processor.restore_masks(outputs[0],
                                                                                      transform_params,
