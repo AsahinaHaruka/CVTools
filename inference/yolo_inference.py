@@ -17,9 +17,9 @@ class YoloObjInference(ONNXInference):
                  enable_trt_profile: bool = False,
                  max_batch_size: int = 5,
                  opt_batch_size: int = 5,
-                 input_image_size: tuple[int, int] = None,
+                 input_image_size: tuple[int, int] | None = None,
                  target_long_side: int = 640,
-                 execution_provider: tuple[str] = ("trt", "cuda", "CoreML", "cpu")):
+                 execution_provider: tuple[str, ...] = ("trt", "cuda", "CoreML", "cpu")):
         """初始化 YOLO 推理会话。
 
         加载 YOLO ONNX 模型并配置推理会话选项。支持 TensorRT 执行提供程序及其动态形状配置。
@@ -33,18 +33,20 @@ class YoloObjInference(ONNXInference):
                 当此参数为 True 时，无论是否提供 `input_image_size`，`fix_image` 都将被设置为 True。
                 默认为 False。
             max_batch_size (int, optional): 预期的最大 Batch Size。
-                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。
-                默认为 5。
+                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。默认为 5。
             opt_batch_size (int, optional): 预期的最优 Batch Size。
-                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。
-                默认为 5。
+                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。默认为 5。
             input_image_size (tuple[int, int] | None, optional): 原始输入图像的分辨率 (Width, Height)。
-                如果提供，将基于 `target_long_side` 计算最佳矩形推理尺寸 (Rectangular Inference)，此时fix_image为True。
-                如果不提供，默认使用 `target_long_side` 作为边长的正方形尺寸，此时fix_image为False。默认为 None。
+                如果提供，将基于 `target_long_side` 计算最佳矩形推理尺寸 (Rectangular Inference)，此时 fix_image 为 True。
+                如果不提供，默认使用 `target_long_side` 作为边长的正方形尺寸，此时 fix_image 为 False。
+                默认为 None。
             target_long_side (int, optional): 预期的输入图像长边尺寸。
-                用于计算实际推理时的输入分辨率。
-                默认为 640。
-            execution_provider (tuple[str], optional): 需要扫描的后端列表
+                用于计算实际推理时的输入分辨率。默认为 640。
+            execution_provider (tuple[str, ...], optional): 需要扫描的后端执行提供者列表。
+                默认为 ("trt", "cuda", "CoreML", "cpu")。
+
+        Raises:
+            FileNotFoundError: 如果 `model_path` 指定的文件不存在。
         """
         super().__init__(model_path=model_path,
                          stride=32,
@@ -62,7 +64,7 @@ class YoloObjInference(ONNXInference):
                                               fill_value=144,
                                               dtype=self.input_meta[0]['type'])
 
-    def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw=False) -> np.ndarray:
+    def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw: bool = False) -> np.ndarray:
         """执行 YOLO 模型的推理。
 
         该方法首先对输入图像数据进行预处理，然后将处理后的图像输入模型进行推理。
@@ -70,14 +72,14 @@ class YoloObjInference(ONNXInference):
 
         Args:
             input_data (list[np.ndarray] | np.ndarray): 输入图像数据。
-                可以是单个 NumPy 数组 (H, W) 或 (H, W, C)，
+                可以是单个 NumPy 数组 `(H, W)` 或 `(H, W, C)`，
                 也可以是包含多个 NumPy 数组的列表，每个数组代表一张图像。
-            raw (bool, optional): 如果为 True，则返回模型原始输出的边界框（未经过后处理）；
-                                  否则，边界框将被还原到原始图像坐标系。
-                                  默认为 True。
+            raw (bool, optional): 是否返回原始模型输出。
+                如果为 True，则返回模型原始输出的边界框（未经过后处理）；
+                如果为 False，边界框将被还原到原始图像坐标系。默认为 False。
 
         Returns:
-            np.ndarray: 推理结果。形状为 `[batch, max_detections, output_dim]`，
+            np.ndarray: 推理结果。形状为 `(batch, max_detections, output_dim)`，
                         其中 `output_dim` 通常为 6，表示 `(x1, y1, x2, y2, score, class_id)`。
         """
         # 预处理输入数据
@@ -111,25 +113,25 @@ class AreaAvgInference(YoloObjInference):
                  enable_trt_profile: bool = True,
                  max_batch_size: int = 5,
                  opt_batch_size: int = 5,
-                 input_image_size: tuple[int, int] = None,
+                 input_image_size: tuple[int, int] | None = None,
                  target_long_side: int = 640):
-        """
+        """初始化区域平均推理会话。
+
         Args:
             model_path (str): ONNX 模型文件的路径。
-            areas: 预定义区域的边界坐标，形状为 `[num_areas, 4]`。
-                其中 4 = (start_x, start_y, end_x, end_y)。
-            class_num (int): 模型输出的类别总数。用于类别投票时的 `minlength` 参数。
-            confidence (float, optional): 置信度阈值。默认为 0.5。
+            areas (list[Area]): 预定义区域的列表。每个 Area 对象应包含 start_x, start_y, end_x, end_y 属性。
+            confidence (float, optional): 置信度阈值。低于此值的检测结果将被忽略。默认为 0.5。
+            class_num (int, optional): 模型输出的类别总数。用于类别投票时的 `minlength` 参数。默认为 3。
             enable_trt_profile (bool, optional): 是否启用 TensorRT 动态形状配置文件生成。
-                如果为 True，将根据 batch size 和尺寸参数预热 TensorRT 引擎缓存，
-                该参数为True时无论是否提供input_image_size，fix_image为True。默认为 False。
-            max_batch_size (int, optional): 预期的最大 Batch Size。
-                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。默认为 5。
-            opt_batch_size (int, optional): 预期的最优 Batch Size。
-                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。默认为 5。
+                如果为 True，将根据 batch size 和尺寸参数预热 TensorRT 引擎缓存。
+                当此参数为 True 时，无论是否提供 `input_image_size`，`fix_image` 都将被设置为 True。
+                默认为 True。
+            max_batch_size (int, optional): 预期的最大 Batch Size。默认为 5。
+            opt_batch_size (int, optional): 预期的最优 Batch Size。默认为 5。
             input_image_size (tuple[int, int] | None, optional): 原始输入图像的分辨率 (Width, Height)。
-                如果提供，将基于 `target_long_side` 计算最佳矩形推理尺寸 (Rectangular Inference)，此时fix_image为True。
-                如果不提供，默认使用 `target_long_side` 作为边长的正方形尺寸，此时fix_image为False。默认为 None。
+                如果提供，将基于 `target_long_side` 计算最佳矩形推理尺寸 (Rectangular Inference)，此时 fix_image 为 True。
+                如果不提供，默认使用 `target_long_side` 作为边长的正方形尺寸，此时 fix_image 为 False。
+                默认为 None。
             target_long_side (int, optional): 预期的输入图像长边尺寸。
                 用于计算实际推理时的输入分辨率。默认为 640。
 
@@ -148,7 +150,7 @@ class AreaAvgInference(YoloObjInference):
         self.areas = np.array([[area.start_x, area.start_y, area.end_x, area.end_y] for area in areas],
                               dtype=np.float32)
 
-    def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw=False) -> np.ndarray:
+    def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw: bool = False) -> np.ndarray:
         """对输入图片进行推理，然后根据预定义区域进行结果合并。
 
         该方法首先调用父类的 `__call__` 方法获取原始的检测结果。
@@ -158,19 +160,20 @@ class AreaAvgInference(YoloObjInference):
 
         Args:
             input_data (list[np.ndarray] | np.ndarray): 输入图像数据。
-                可以是单个 NumPy 数组 (H, W) 或 (H, W, C)，
+                可以是单个 NumPy 数组 `(H, W)` 或 `(H, W, C)`，
                 也可以是包含多个 NumPy 数组的列表。
-            raw (bool, optional): 如果为 True，则返回模型原始输出的边界框（未经过后处理）；
-                                  否则，边界框将被还原到原始图像坐标系。默认为 True。
+            raw (bool, optional): 是否返回原始模型输出。
+                如果为 True，则返回模型原始输出的边界框（未经过后处理）；
+                否则，边界框将被还原到原始图像坐标系。默认为 False。
                                   注意：此处的 `raw` 参数传递给 `super().__call__`，
                                   但 `process_detections` 始终处理还原后的坐标。
 
         Returns:
-            np.ndarray: 经过区域合并和处理后的检测结果。
-                        形状为 `[len(self.areas), 5]`，其中 5 = (x1, y1, x2, y2, class)。
+            np.ndarray: 经过区域合并和处理后的检测结果，形状为 `(len(self.areas), 5)`。
+                        其中 5 代表 `(x1, y1, x2, y2, class_id)`。
                         如果某个区域没有检测到目标，其类别将为 -1。
         Note:
-        此函数假设NMS内置于模型之中
+            此函数假设 NMS 内置于模型之中。
         """
         raw_output = super().__call__(input_data, raw=raw)  # [batch, 300, 6]
 
@@ -188,17 +191,17 @@ def process_detections(raw_output: np.ndarray, area_bounds: np.ndarray, confiden
     加权平均边界框，并通过加权投票确定该区域的主导类别。
 
     Args:
-        raw_output (np.ndarray): 模型的原始检测输出，形状为 `[batch_size, max_detections, 6]`。
-                                 其中 6 = (x1, y1, x2, y2, score, class_id)。
-        area_bounds (np.ndarray): 预定义区域的边界坐标，形状为 `[num_areas, 4]`。
-                                  其中 4 = (start_x, start_y, end_x, end_y)。
+        raw_output (np.ndarray): 模型的原始检测输出，形状为 `(batch_size, max_detections, 6)`。
+            其中 6 代表 `(x1, y1, x2, y2, score, class_id)`。
+        area_bounds (np.ndarray): 预定义区域的边界坐标，形状为 `(num_areas, 4)`。
+            其中 4 代表 `(start_x, start_y, end_x, end_y)`。
         confidence (float): 检测结果的置信度阈值。低于此阈值的检测将被忽略。
         num_areas (int): 预定义区域的数量。
         class_num (int): 模型输出的类别总数。用于类别投票时的 `minlength` 参数。
 
     Returns:
-        np.ndarray: 经过处理后的检测结果，形状为 `[num_areas, 5]`。
-                    其中 5 = (x1, y1, x2, y2, class_id)。
+        np.ndarray: 经过处理后的检测结果，形状为 `(num_areas, 5)`。
+            其中 5 代表 `(x1, y1, x2, y2, class_id)`。
                     如果某个区域没有检测到目标，其 `class_id` 将为 -1。
 
     Note:
@@ -281,23 +284,24 @@ class NumCountInference(YoloObjInference):
                  enable_trt_profile: bool = True,
                  max_batch_size: int = 5,
                  opt_batch_size: int = 5,
-                 input_image_size: tuple[int, int] = None,
+                 input_image_size: tuple[int, int] | None = None,
                  target_long_side: int = 640
                  ):
-        """
+        """初始化数量统计推理会话。
+
         Args:
             model_path (str): ONNX 模型文件的路径。
             confidence (float, optional): 置信度阈值。默认为 0.5。
             enable_trt_profile (bool, optional): 是否启用 TensorRT 动态形状配置文件生成。
-                如果为 True，将根据 batch size 和尺寸参数预热 TensorRT 引擎缓存，
-                该参数为True时无论是否提供input_image_size，fix_image为True。默认为 False。
-            max_batch_size (int, optional): 预期的最大 Batch Size。
-                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。默认为 5。
-            opt_batch_size (int, optional): 预期的最优 Batch Size。
-                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。默认为 5。
+                如果为 True，将根据 batch size 和尺寸参数预热 TensorRT 引擎缓存。
+                当此参数为 True 时，无论是否提供 `input_image_size`，`fix_image` 都将被设置为 True。
+                默认为 True。
+            max_batch_size (int, optional): 预期的最大 Batch Size。默认为 5。
+            opt_batch_size (int, optional): 预期的最优 Batch Size。默认为 5。
             input_image_size (tuple[int, int] | None, optional): 原始输入图像的分辨率 (Width, Height)。
-                如果提供，将基于 `target_long_side` 计算最佳矩形推理尺寸 (Rectangular Inference)，此时fix_image为True。
-                如果不提供，默认使用 `target_long_side` 作为边长的正方形尺寸，此时fix_image为False。默认为 None。
+                如果提供，将基于 `target_long_side` 计算最佳矩形推理尺寸 (Rectangular Inference)，此时 fix_image 为 True。
+                如果不提供，默认使用 `target_long_side` 作为边长的正方形尺寸，此时 fix_image 为 False。
+                默认为 None。
             target_long_side (int, optional): 预期的输入图像长边尺寸。
                 用于计算实际推理时的输入分辨率。默认为 640。
 
@@ -324,8 +328,9 @@ class NumCountInference(YoloObjInference):
 
         Args:
             input_data (list[np.ndarray] | np.ndarray): 输入图像数据。
-                可以是单个 NumPy 数组 (H, W) 或 (H, W, C)，
+                可以是单个 NumPy 数组 `(H, W)` 或 `(H, W, C)`，
                 也可以是包含多个 NumPy 数组的列表。
+            raw (bool, optional): 是否返回原始模型输出。默认为 True。
 
         Returns:
             int: 检测到的目标数量的众数。
@@ -354,37 +359,36 @@ class YoloSegInference(ONNXInference):
                  enable_trt_profile: bool = False,
                  max_batch_size: int = 5,
                  opt_batch_size: int = 5,
-                 input_image_size: tuple[int, int] = None,
+                 input_image_size: tuple[int, int] | None = None,
                  target_long_side: int = 640,
-                 execution_provider: tuple[str] = ("trt", "cuda", "CoreML", "cpu"),
+                 execution_provider: tuple[str, ...] = ("trt", "cuda", "CoreML", "cpu"),
                  uniform_transform: bool = False):
-        """初始化 YOLO 推理会话。
+        """初始化 YOLO 实例分割推理会话。
 
         加载 YOLO ONNX 模型并配置推理会话选项。支持 TensorRT 执行提供程序及其动态形状配置。
         如果启用了 TensorRT 配置文件 (`enable_trt_profile=True`)，将根据提供的批处理大小和图像尺寸参数
         构建优化配置文件。
 
         Args:
-            model_path (str): ONNX 模型文件的路径，该模型应包含 NMS (Non-Maximum Suppression) 操作。
+            model_path (str): ONNX 模型文件的路径，该模型应包含 NMS 操作。
             enable_trt_profile (bool, optional): 是否启用 TensorRT 动态形状配置文件生成。
                 如果为 True，将根据 batch size 和尺寸参数预热 TensorRT 引擎缓存。
                 当此参数为 True 时，无论是否提供 `input_image_size`，`fix_image` 都将被设置为 True。
                 默认为 False。
-            max_batch_size (int, optional): 预期的最大 Batch Size。
-                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。
-                默认为 5。
-            opt_batch_size (int, optional): 预期的最优 Batch Size。
-                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。
-                默认为 5。
+            max_batch_size (int, optional): 预期的最大 Batch Size。默认为 5。
+            opt_batch_size (int, optional): 预期的最优 Batch Size。默认为 5。
             input_image_size (tuple[int, int] | None, optional): 原始输入图像的分辨率 (Width, Height)。
-                如果提供，将基于 `target_long_side` 计算最佳矩形推理尺寸 (Rectangular Inference)，此时fix_image为True。
-                如果不提供，默认使用 `target_long_side` 作为边长的正方形尺寸，此时fix_image为False。默认为 None。
+                如果提供，将基于 `target_long_side` 计算最佳矩形推理尺寸 (Rectangular Inference)，此时 fix_image 为 True。
+                如果不提供，默认使用 `target_long_side` 作为边长的正方形尺寸，此时 fix_image 为 False。
+                默认为 None。
             target_long_side (int, optional): 预期的输入图像长边尺寸。
-                用于计算实际推理时的输入分辨率。
-                默认为 640。
-            execution_provider (tuple[str], optional): 需要扫描的后端列表,
-
-            uniform_transform (bool): 如果为 True，假设所有图片可以使用完全相同的预处理（如视频流）。
+                用于计算实际推理时的输入分辨率。默认为 640。
+            execution_provider (tuple[str, ...], optional): 需要扫描的后端执行提供者列表。
+                默认为 ("trt", "cuda", "CoreML", "cpu")。
+            uniform_transform (bool, optional): 是否启用统一变换优化。
+                如果为 True，假设 Batch 内所有图片可以使用完全相同的预处理和后处理（如视频流），
+        Raises:
+            FileNotFoundError: 如果 `model_path` 指定的文件不存在。
         """
         super().__init__(model_path=model_path,
                          stride=32,
@@ -403,7 +407,10 @@ class YoloSegInference(ONNXInference):
                                               dtype=self.input_meta[0]['type'],
                                               uniform_transform=uniform_transform)
 
-    def __call__(self, input_data: list[np.ndarray] | np.ndarray, return_boxes: bool = True, return_masks: bool = True,
+    def __call__(self, input_data: list[np.ndarray] | np.ndarray,
+                 conf_threshold: float = 0.25,
+                 return_boxes: bool = True,
+                 return_masks: bool = True,
                  raw: bool = False) -> dict[str, list[np.ndarray] | np.ndarray]:
         """执行 YOLO 分割模型的推理。
 
@@ -412,32 +419,29 @@ class YoloSegInference(ONNXInference):
 
         Args:
             input_data (list[np.ndarray] | np.ndarray): 输入图像数据。
-                可以是单个 NumPy 数组 (H, W) 或 (H, W, C)，
+                可以是单个 NumPy 数组 `(H, W)` 或 `(H, W, C)`，
                 也可以是包含多个 NumPy 数组的列表，每个数组代表一张图像。
+            conf_threshold (float): 置信度阈值。默认为 0.25。
             return_boxes (bool, optional): 是否在结果中包含边界框。默认为 True。
             return_masks (bool, optional): 是否在结果中包含分割掩码。默认为 True。
-            raw (bool, optional): 如果为 True，则返回模型原始输出的边界框和掩码（未经过后处理）；
-                                  否则，边界框和掩码将被还原到原始图像坐标系。默认为 False。
+            raw (bool, optional): 是否返回原始模型输出。
+                如果为 True，则返回模型原始输出的边界框和掩码（未经过后处理）；
+                否则，边界框和掩码将被还原到原始图像坐标系。默认为 False。
 
         Returns:
             dict[str, list[np.ndarray] | np.ndarray]: 包含推理结果的字典。
-                如果 raw=True，返回包含原始 'boxes', 'mask_coefficients', 'protos' 的字典。
-                否则返回包含 'box' 和 'masks' 的字典：
-                - 'box': (Batch, N, 6) [x1, y1, x2, y2, score, class]
-                - 'masks': list[np.ndarray]，每个元素为 (N, H, W) 的二值掩码。
+                - 如果 `raw=True`，返回包含原始 `'boxes'`, `'mask_coefficients'`, `'protos'` 的字典。
+                - 否则返回包含 `'box'` 和 `'masks'` 的字典：
+                    - `'box'`: `list[np.ndarray]`，每个元素为 `(N, 6)`，格式为 `[x1, y1, x2, y2, score, class]`。
+                    - `'masks'`: `list[np.ndarray]`，每个元素为 `(N, H, W)` 的二值掩码。
         """
         # 预处理输入数据
         processed_input, transform_params = self.image_processor(input_data)
 
         # 执行推理
-
         outputs = super().__call__(processed_input)
 
-
-        
-        # 自动识别检测输出和原型掩码输出
-        detections, protos = (outputs[0], outputs[1]) if outputs[0].ndim == 3 else (outputs[1], outputs[0])
-
+        detections, protos = outputs[0], outputs[1]
 
         if raw:
             return {
@@ -446,33 +450,64 @@ class YoloSegInference(ONNXInference):
                 'protos': protos
             }
 
+        batch_raw_boxes = []  # 收集原始检测框
+        batch_raw_masks = []  # 收集原始 Mask
+
+        batch_size = detections.shape[0]
+
+        for i in range(batch_size):
+            det = detections[i]  # [N, 6+]
+            proto = protos[i]  # [32, MH, MW]
+
+            # 阈值过滤
+            keep = det[:, 4] >= conf_threshold
+            det = det[keep]
+
+            if len(det) == 0:
+                if return_boxes or return_masks:
+                    batch_raw_boxes.append(np.zeros((0, det.shape[1]), dtype=np.float32))
+
+                if return_masks:
+                    _, mh, mw = proto.shape
+                    batch_raw_masks.append(np.zeros((0, mh, mw), dtype=np.float32))
+                continue
+
+            if return_boxes or return_masks:
+                batch_raw_boxes.append(det)
+
+            if return_masks:
+                mask_coefficients = det[:, 6:]
+                _, mh, mw = proto.shape
+
+                # Matmul: [M, 32] @ [32, H*W] -> [M, H*W]
+                masks_flat = np.matmul(mask_coefficients, proto.reshape(32, -1))
+
+                # Sigmoid
+                clip_limit = 9 if masks_flat.dtype == np.float16 else 80
+                masks_flat = masks_flat.clip(-clip_limit, clip_limit)
+                masks_flat = 1 / (1 + np.exp(-masks_flat))
+
+                # Reshape -> [M, H, W] & Append
+                batch_raw_masks.append(masks_flat.reshape(-1, mh, mw))
+
         res = {}
-        # 返回检测框
+
         if return_boxes:
-            res['box'] = self.image_processor.restore_boxes(detections[..., :6], transform_params)
+            restored_boxes_list = self.image_processor.restore_boxes(
+                batch_raw_boxes,
+                transform_params
+            )
+
+            # 只需要前6列 (xyxy, conf, cls)
+            res['box'] = [b[:, :6] for b in restored_boxes_list]
 
         if return_masks:
-            # --- 处理分割掩码 ---
-            batch_size, num_det, _ = detections.shape
-            _, num_protos, mask_h, mask_w = protos.shape
-            # 1. 生成掩码: mask coefficients * protos
-            # Protos: [B, 32, H, W] -> [B, 32, H*W]
-            protos_flat = protos.reshape(batch_size, num_protos, -1)
-            # Matmul: [B, N, 32] @ [B, 32, H*W] -> [B, N, H*W]
-            masks = np.matmul(detections[..., 6:], protos_flat)
-            # Sigmoid
-            clip_limit = 9 if masks.dtype == np.float16 else 80
-            masks = masks.clip( -clip_limit, clip_limit)
-            masks = 1 / (1 + np.exp(-masks))
-            # Reshape: [B, N, H, W]
-            masks = masks.reshape(batch_size, num_det, mask_h, mask_w)
-            # 2. 还原掩码 (包含 Crop to Box)
             res['masks'] = self.image_processor.restore_masks(
-                masks,
-                transform_params,
-                boxes=detections[..., :4],
+                masks=batch_raw_masks,  # List[np.ndarray]
+                transform_params=transform_params,
+                boxes=[b[:, :4] for b in batch_raw_boxes],
                 mask_threshold=0.5,
-                uniform_transform=self.image_processor.uniform_transform
+                uniform_transform=False
             )
 
         return res
