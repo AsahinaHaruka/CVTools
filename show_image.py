@@ -16,13 +16,18 @@ from ulit.logger import LoggerBuilder
 
 logger = LoggerBuilder().get_logger(name="data_split")
 
-def draw_detections(image, detections, conf_threshold=0.5):
+def draw_detections(image: np.ndarray, detections: np.ndarray, conf_threshold: float = 0.5) -> np.ndarray:
     """
-    在图像上绘制检测结果.
-    :param image: 原始图像 (OpenCV BGR格式).
-    :param detections: 单张图片的检测结果, shape [N, 6], 6 = (x1, y1, x2, y2, score, class_id).
-    :param conf_threshold: 置信度阈值.
-    :return: 绘制了检测框的图像.
+    在图像上绘制检测结果。
+
+    Args:
+        image (np.ndarray): 原始图像 (OpenCV BGR格式)。
+        detections (np.ndarray): 单张图片的检测结果，形状为 [N, 6]。
+            6 代表 (x1, y1, x2, y2, score, class_id)。
+        conf_threshold (float, optional): 置信度阈值。默认为 0.5。
+
+    Returns:
+        np.ndarray: 绘制了检测框的图像。
     """
     # 为不同类别生成不同颜色
     np.random.seed(0)
@@ -53,8 +58,13 @@ def draw_detections(image, detections, conf_threshold=0.5):
     return image
 
 
-def main(args):
-    """主函数，执行推理、绘制和保存."""
+def main(args: argparse.Namespace) -> None:
+    """
+    主函数，执行推理、绘制和保存。
+
+    Args:
+        args (argparse.Namespace): 命令行参数对象，包含 model, input, output 等属性。
+    """
     # 1. 初始化推理引擎
     logger.info("Initializing inference engine...")
     inference_engine = YoloObjInference(args.model)
