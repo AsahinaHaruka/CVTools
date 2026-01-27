@@ -62,8 +62,6 @@ class YoloObjInference(ONNXInference):
                                               fill_value=144,
                                               dtype=self.input_meta[0]['type'])
 
-
-
     def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw=False) -> np.ndarray:
         """执行 YOLO 模型的推理。
 
@@ -87,9 +85,7 @@ class YoloObjInference(ONNXInference):
 
         # 执行推理
         outputs = super().__call__(processed_input)[0].astype(np.float32)
-        return  outputs if raw else  self.image_processor.restore_boxes(outputs, transform_params)
-
-
+        return outputs if raw else self.image_processor.restore_boxes(outputs, transform_params)
 
     def __del__(self):
         """清理资源"""
@@ -318,7 +314,7 @@ class NumCountInference(YoloObjInference):
                          )
         self.confidence = confidence
 
-    def __call__(self, input_data: list[np.ndarray] | np.ndarray) -> int:
+    def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw: bool = True) -> int:
         """对输入图片进行推理，并进行NMS和置信度过滤，然后计算目标数量。
 
         该方法首先对输入数据进行预处理，然后执行模型推理。
@@ -336,7 +332,7 @@ class NumCountInference(YoloObjInference):
         """
 
         # Get raw inference output: [batch, 300, 6] where 6 = (x1,y1,x2,y2,score,class)
-        raw_output = super().__call__(input_data, raw=True)
+        raw_output = super().__call__(input_data, raw=raw)
 
         # 所有batch的钢坯数量计数
         confidence_mask = raw_output[:, :, 4] >= self.confidence  # [batch, 300]
@@ -350,3 +346,133 @@ class NumCountInference(YoloObjInference):
         mode_index = np.argmax(frequencies)
 
         return int(unique_counts[mode_index])
+
+
+class YoloSegInference(ONNXInference):
+    def __init__(self,
+                 model_path: str,
+                 enable_trt_profile: bool = False,
+                 max_batch_size: int = 5,
+                 opt_batch_size: int = 5,
+                 input_image_size: tuple[int, int] = None,
+                 target_long_side: int = 640,
+                 execution_provider: tuple[str] = ("trt", "cuda", "CoreML", "cpu"),
+                 uniform_transform: bool = False):
+        """初始化 YOLO 推理会话。
+
+        加载 YOLO ONNX 模型并配置推理会话选项。支持 TensorRT 执行提供程序及其动态形状配置。
+        如果启用了 TensorRT 配置文件 (`enable_trt_profile=True`)，将根据提供的批处理大小和图像尺寸参数
+        构建优化配置文件。
+
+        Args:
+            model_path (str): ONNX 模型文件的路径，该模型应包含 NMS (Non-Maximum Suppression) 操作。
+            enable_trt_profile (bool, optional): 是否启用 TensorRT 动态形状配置文件生成。
+                如果为 True，将根据 batch size 和尺寸参数预热 TensorRT 引擎缓存。
+                当此参数为 True 时，无论是否提供 `input_image_size`，`fix_image` 都将被设置为 True。
+                默认为 False。
+            max_batch_size (int, optional): 预期的最大 Batch Size。
+                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。
+                默认为 5。
+            opt_batch_size (int, optional): 预期的最优 Batch Size。
+                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。
+                默认为 5。
+            input_image_size (tuple[int, int] | None, optional): 原始输入图像的分辨率 (Width, Height)。
+                如果提供，将基于 `target_long_side` 计算最佳矩形推理尺寸 (Rectangular Inference)，此时fix_image为True。
+                如果不提供，默认使用 `target_long_side` 作为边长的正方形尺寸，此时fix_image为False。默认为 None。
+            target_long_side (int, optional): 预期的输入图像长边尺寸。
+                用于计算实际推理时的输入分辨率。
+                默认为 640。
+            execution_provider (tuple[str], optional): 需要扫描的后端列表,
+
+            uniform_transform (bool): 如果为 True，假设所有图片可以使用完全相同的预处理（如视频流）。
+        """
+        super().__init__(model_path=model_path,
+                         stride=32,
+                         enable_trt_profile=enable_trt_profile,
+                         max_batch_size=max_batch_size,
+                         opt_batch_size=opt_batch_size,
+                         input_image_size=input_image_size,
+                         target_long_side=target_long_side,
+                         execution_provider=execution_provider
+                         )
+
+        self.image_processor = ImageProcessor(target_size=self.img_size,
+                                              stride=self.stride,
+                                              is_fixed_size=self.fix_image,
+                                              fill_value=144,
+                                              dtype=self.input_meta[0]['type'],
+                                              uniform_transform=uniform_transform)
+
+    def __call__(self, input_data: list[np.ndarray] | np.ndarray, return_boxes: bool = True, return_masks: bool = True,
+                 raw: bool = False) -> dict[str, list[np.ndarray] | np.ndarray]:
+        """执行 YOLO 分割模型的推理。
+
+        该方法首先对输入图像数据进行预处理，然后将处理后的图像输入模型进行推理。
+        根据 `raw` 参数，选择是否将推理结果（边界框和mask）还原到原始图像坐标系。
+
+        Args:
+            input_data (list[np.ndarray] | np.ndarray): 输入图像数据。
+                可以是单个 NumPy 数组 (H, W) 或 (H, W, C)，
+                也可以是包含多个 NumPy 数组的列表，每个数组代表一张图像。
+            return_boxes (bool, optional): 是否在结果中包含边界框。默认为 True。
+            return_masks (bool, optional): 是否在结果中包含分割掩码。默认为 True。
+            raw (bool, optional): 如果为 True，则返回模型原始输出的边界框和掩码（未经过后处理）；
+                                  否则，边界框和掩码将被还原到原始图像坐标系。默认为 False。
+
+        Returns:
+            dict[str, list[np.ndarray] | np.ndarray]: 包含推理结果的字典。
+                如果 raw=True，返回包含原始 'boxes', 'mask_coefficients', 'protos' 的字典。
+                否则返回包含 'box' 和 'masks' 的字典：
+                - 'box': (Batch, N, 6) [x1, y1, x2, y2, score, class]
+                - 'masks': list[np.ndarray]，每个元素为 (N, H, W) 的二值掩码。
+        """
+        # 预处理输入数据
+        processed_input, transform_params = self.image_processor(input_data)
+
+        # 执行推理
+
+        outputs = super().__call__(processed_input)
+
+
+        
+        # 自动识别检测输出和原型掩码输出
+        detections, protos = (outputs[0], outputs[1]) if outputs[0].ndim == 3 else (outputs[1], outputs[0])
+
+
+        if raw:
+            return {
+                'boxes': detections[..., :6],
+                'mask_coefficients': detections[..., 6:],
+                'protos': protos
+            }
+
+        res = {}
+        # 返回检测框
+        if return_boxes:
+            res['box'] = self.image_processor.restore_boxes(detections[..., :6], transform_params)
+
+        if return_masks:
+            # --- 处理分割掩码 ---
+            batch_size, num_det, _ = detections.shape
+            _, num_protos, mask_h, mask_w = protos.shape
+            # 1. 生成掩码: mask coefficients * protos
+            # Protos: [B, 32, H, W] -> [B, 32, H*W]
+            protos_flat = protos.reshape(batch_size, num_protos, -1)
+            # Matmul: [B, N, 32] @ [B, 32, H*W] -> [B, N, H*W]
+            masks = np.matmul(detections[..., 6:], protos_flat)
+            # Sigmoid
+            clip_limit = 9 if masks.dtype == np.float16 else 80
+            masks = masks.clip( -clip_limit, clip_limit)
+            masks = 1 / (1 + np.exp(-masks))
+            # Reshape: [B, N, H, W]
+            masks = masks.reshape(batch_size, num_det, mask_h, mask_w)
+            # 2. 还原掩码 (包含 Crop to Box)
+            res['masks'] = self.image_processor.restore_masks(
+                masks,
+                transform_params,
+                boxes=detections[..., :4],
+                mask_threshold=0.5,
+                uniform_transform=self.image_processor.uniform_transform
+            )
+
+        return res

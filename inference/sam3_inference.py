@@ -135,14 +135,8 @@ class SAM3Inference(ONNXInference):
         if return_boxes:
             res['boxes'] = outputs[1] if raw else self.image_processor.restore_boxes(outputs[1],
                                                                                      transform_params,
-                                                                                     input_shape=(
-                                                                                         self.image_processor.target_h,
-                                                                                         self.image_processor.target_w),
                                                                                      box_format='xyxy')
         if return_masks:
             res['masks'] = outputs[0] if raw else self.image_processor.restore_masks(outputs[0],
-                                                                                     transform_params,
-                                                                                     input_shape=(
-                                                                                         self.image_processor.target_h,
-                                                                                         self.image_processor.target_w))
+                                                                                     transform_params)
         return res

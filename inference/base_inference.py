@@ -96,7 +96,12 @@ class ONNXInference:
                 stride,
                 input_image_size
             )
-            print(f"ℹ️ [Init] 尺寸计算: 动态模型，目标长边 {target_long_side} -> 计算推理尺寸 {self.img_size}")
+            if self.fix_image:
+                print(f"ℹ️ [Init] 使用固定推理尺寸。尺寸计算: 输入图片尺寸{input_image_size}，目标长边 {target_long_side} -> 计算推理尺寸 {self.img_size}")
+            else:
+                print(f"ℹ️ [Init] 使用动态推理尺寸。目标长边 {target_long_side}")
+
+
 
         trt_provider_options = {
             'device_id': 0,
