@@ -323,6 +323,49 @@ class ImageProcessor:
         return transformed_tensor.astype(self.dtype), transform_params
 
     @staticmethod
+    def process_box_coordinates(boxes: np.ndarray,
+                                input_shape: tuple[int, int],
+                                box_format: str) -> np.ndarray:
+        """
+        处理 Box 坐标：
+        1. 自动检测并执行反归一化 (0-1 -> input_shape)。
+        2. 自动执行格式转换 (cxcywh -> xyxy)。
+
+        Args:
+            boxes (np.ndarray): 检测框，形状为 (N, 4+) 或 (B, N, 4+)。
+            input_shape (tuple[int, int]): 模型输入图像的 (H, W)。
+            box_format (str): 原始框格式 'xyxy' 或 'cxcywh'。
+
+        Returns:
+            np.ndarray: 处理后的 xyxy 绝对坐标框（副本）。
+        """
+        # 复制一份，避免修改原数据
+        res = boxes.copy()
+
+        if res.size == 0:
+            return res
+
+        # 自动反归一化 (Check normalized)
+        # 假设坐标在 [0, 1.5] 范围内则认为是归一化坐标 (1.5 是容错，防止偶尔越界)
+        if res[..., :4].max() <= 1.5:
+            h, w = input_shape
+            res[..., 0] *= w
+            res[..., 1] *= h
+            res[..., 2] *= w
+            res[..., 3] *= h
+
+        # 格式转换 cxcywh -> xyxy
+        if box_format == 'cxcywh':
+            cx, cy, w, h = res[..., 0], res[..., 1], res[..., 2], res[..., 3]
+            x1 = cx - 0.5 * w
+            y1 = cy - 0.5 * h
+            x2 = cx + 0.5 * w
+            y2 = cy + 0.5 * h
+            res[..., 0], res[..., 1], res[..., 2], res[..., 3] = x1, y1, x2, y2
+
+        return res
+
+    @staticmethod
     def restore_boxes(detections: np.ndarray | list[np.ndarray],
                       transform_params: list[dict],
                       box_format: str = 'xyxy') -> np.ndarray | list[np.ndarray]:
@@ -369,26 +412,14 @@ class ImageProcessor:
                 results.append(det)
                 continue
 
-            res = det.copy()
             params = transform_params[i]
 
             # 反归一化
             input_shape = params.get('input_shape')
-            if input_shape is not None and res[:, :4].max() <= 1.5:
-                h, w = input_shape
-                res[:, 0] *= w
-                res[:, 1] *= h
-                res[:, 2] *= w
-                res[:, 3] *= h
-
-            # 格式转换 (cxcywh -> xyxy)
-            if box_format == 'cxcywh':
-                cx, cy, w, h = res[:, 0], res[:, 1], res[:, 2], res[:, 3]
-                x1 = cx - 0.5 * w
-                y1 = cy - 0.5 * h
-                x2 = cx + 0.5 * w
-                y2 = cy + 0.5 * h
-                res[:, 0], res[:, 1], res[:, 2], res[:, 3] = x1, y1, x2, y2
+            if input_shape:
+                res = ImageProcessor.process_box_coordinates(det, input_shape, box_format)
+            else:
+                res = det.copy()
 
             # 还原 Letterbox
             scale = params['scale']
@@ -421,26 +452,12 @@ class ImageProcessor:
         Returns:
             np.ndarray: 还原后的检测结果数组。
         """
-        # 避免修改原数据
-        result = detections.copy()
-
         # 反归一化
         input_shape = transform_params[0].get('input_shape')
-        if input_shape is not None and result[..., :4].max() <= 1.5:
-            h, w = input_shape
-            result[..., 0] *= w
-            result[..., 1] *= h
-            result[..., 2] *= w
-            result[..., 3] *= h
-
-        # 格式转换 (cxcywh -> xyxy)
-        if box_format == 'cxcywh':
-            cx, cy, w, h = result[..., 0], result[..., 1], result[..., 2], result[..., 3]
-            x1 = cx - 0.5 * w
-            y1 = cy - 0.5 * h
-            x2 = cx + 0.5 * w
-            y2 = cy + 0.5 * h
-            result[..., 0], result[..., 1], result[..., 2], result[..., 3] = x1, y1, x2, y2
+        if input_shape:
+            result = ImageProcessor.process_box_coordinates(detections, input_shape, box_format)
+        else:
+            result = detections.copy()
 
         # 还原 Letterbox
         # 提取 scale 和 padding 为 numpy 数组以利用广播机制
@@ -469,6 +486,7 @@ class ImageProcessor:
     def restore_masks(masks: np.ndarray | list[np.ndarray],
                       transform_params: list[dict],
                       boxes: np.ndarray | list[np.ndarray] | None = None,
+                      box_format: str = 'xyxy',
                       mask_threshold: float = 0.0,
                       uniform_transform: bool = False) -> list[np.ndarray]:
         """
@@ -482,8 +500,9 @@ class ImageProcessor:
                 每个字典应包含 'orig_shape', 'padding', 'input_shape'。
             boxes (np.ndarray | list[np.ndarray] | None, optional): 对应的检测框。
                 可以是 `(B, N, 4)` 的数组或列表。
-                坐标必须是模型输出坐标系（即未还原的坐标），格式为 xyxy。
+                坐标必须是模型输出坐标系(即未还原的坐标)。
                 如果提供，将执行 Crop to Box 操作，去除框外的噪声。默认为 None。
+            box_format (str, optional): 输入框的格式，支持 'xyxy' 或 'cxcywh'。默认为 'xyxy'。
             mask_threshold (float, optional): Mask 二值化的阈值。
                 默认为 0.0 (适用于 Logits)。如果是概率值 (0-1)，建议设置为 0.5。
             uniform_transform (bool, optional): 是否启用统一变换优化。
@@ -518,6 +537,7 @@ class ImageProcessor:
                 masks=masks,
                 params=transform_params[0],
                 boxes=boxes,
+                box_format=box_format,
                 mask_threshold=mask_threshold
             )
         else:
@@ -526,6 +546,7 @@ class ImageProcessor:
                 masks=masks,
                 transform_params=transform_params,
                 boxes=boxes,
+                box_format=box_format,
                 mask_threshold=mask_threshold
             )
 
@@ -533,6 +554,7 @@ class ImageProcessor:
     def _restore_masks_uniform(masks: np.ndarray,
                                params: dict,
                                boxes: np.ndarray | None,
+                               box_format: str,
                                mask_threshold: float) -> list[np.ndarray]:
         """
         还原分割掩码（统一处理模式）。
@@ -543,6 +565,7 @@ class ImageProcessor:
             masks (np.ndarray): Mask 数组，形状为 (B, N, H, W)。
             params (dict): 统一的变换参数。
             boxes (np.ndarray | None): 检测框数组，形状为 (B, N, 4)。
+            box_format (str): 用于指定 boxes 的格式。
             mask_threshold (float): 二值化阈值。
 
         Returns:
@@ -559,11 +582,12 @@ class ImageProcessor:
 
         #  Crop to Box (去除框外噪声)
         if boxes is not None and isinstance(boxes, np.ndarray):
+            processed_boxes = ImageProcessor.process_box_coordinates(boxes, (input_h, input_w), box_format)
             # 扩展维度用于广播
-            b_x1 = (boxes[..., 0] * scale_x)[..., None, None]
-            b_y1 = (boxes[..., 1] * scale_y)[..., None, None]
-            b_x2 = (boxes[..., 2] * scale_x)[..., None, None]
-            b_y2 = (boxes[..., 3] * scale_y)[..., None, None]
+            b_x1 = (processed_boxes[..., 0] * scale_x)[..., None, None]
+            b_y1 = (processed_boxes[..., 1] * scale_y)[..., None, None]
+            b_x2 = (processed_boxes[..., 2] * scale_x)[..., None, None]
+            b_y2 = (processed_boxes[..., 3] * scale_y)[..., None, None]
 
             # 生成网格
             x_range = np.arange(mask_w, dtype=np.float32)[None, None, None, :]
@@ -633,6 +657,7 @@ class ImageProcessor:
     def _restore_masks_sequential(masks: np.ndarray | list,
                                   transform_params: list[dict],
                                   boxes: np.ndarray | list | None,
+                                  box_format: str,
                                   mask_threshold: float) -> list[np.ndarray]:
         """
         还原分割掩码（顺序处理模式）。
@@ -643,6 +668,7 @@ class ImageProcessor:
             masks (np.ndarray | list): Mask 数据。
             transform_params (list[dict]): 变换参数列表。
             boxes (np.ndarray | list | None): 检测框数据。
+            box_format (str): 用于指定 boxes 的格式。
             mask_threshold (float): 二值化阈值。
 
         Returns:
@@ -674,10 +700,11 @@ class ImageProcessor:
                 curr_box = boxes[i]
 
                 if curr_box is not None and len(curr_box) > 0:
-                    b_x1 = (curr_box[:, 0] * scale_x)[:, None, None]
-                    b_y1 = (curr_box[:, 1] * scale_y)[:, None, None]
-                    b_x2 = (curr_box[:, 2] * scale_x)[:, None, None]
-                    b_y2 = (curr_box[:, 3] * scale_y)[:, None, None]
+                    processed_box = ImageProcessor.process_box_coordinates(curr_box, (input_h, input_w), box_format)
+                    b_x1 = (processed_box[:, 0] * scale_x)[:, None, None]
+                    b_y1 = (processed_box[:, 1] * scale_y)[:, None, None]
+                    b_x2 = (processed_box[:, 2] * scale_x)[:, None, None]
+                    b_y2 = (processed_box[:, 3] * scale_y)[:, None, None]
 
                     x_range = np.arange(mask_w, dtype=np.float32)[None, None, :]
                     y_range = np.arange(mask_h, dtype=np.float32)[None, :, None]
