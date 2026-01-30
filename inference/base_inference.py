@@ -36,7 +36,7 @@ class ONNXInference:
             input_image_size: tuple[int, int] | None = None,
             target_long_side: int = 640,
             other_size: tuple[int, int, int] = (0, 100, 200),
-            execution_provider: tuple[str, ...]  = ("trt", "cuda", "CoreML", "cpu"),
+            execution_provider: tuple[str, ...] = ("trt", "cuda", "CoreML", "cpu"),
     ):
         """初始化 ONNX 推理会话。
 
@@ -101,8 +101,6 @@ class ONNXInference:
                 print(f"ℹ️ [Init] 使用固定推理尺寸。尺寸计算: 输入图片尺寸{input_image_size}，目标长边 {target_long_side} -> 计算推理尺寸 {self.img_size}")
             else:
                 print(f"ℹ️ [Init] 使用动态推理尺寸。目标长边 {target_long_side}")
-
-
 
         trt_provider_options = {
             'device_id': 0,
@@ -348,3 +346,18 @@ class ONNXInference:
         outputs = self.session.run(self.output_names, feed_dict)
 
         return outputs
+
+    def __del__(self):
+        """清理资源"""
+        try:
+            if hasattr(self, 'session'):
+                del self.session
+        except Exception:
+            pass
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        try:
+            if hasattr(self, 'session'):
+                del self.session
+        except Exception:
+            pass

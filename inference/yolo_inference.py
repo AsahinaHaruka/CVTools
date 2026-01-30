@@ -11,7 +11,7 @@ from .image_processor import ImageProcessor
 from utils.data_define import Area
 
 
-class YoloObjInference(ONNXInference):
+class YoloObjInference:
     def __init__(self,
                  model_path: str,
                  enable_trt_profile: bool = False,
@@ -48,21 +48,21 @@ class YoloObjInference(ONNXInference):
         Raises:
             FileNotFoundError: 如果 `model_path` 指定的文件不存在。
         """
-        super().__init__(model_path=model_path,
-                         stride=32,
-                         enable_trt_profile=enable_trt_profile,
-                         max_batch_size=max_batch_size,
-                         opt_batch_size=opt_batch_size,
-                         input_image_size=input_image_size,
-                         target_long_side=target_long_side,
-                         execution_provider=execution_provider
-                         )
+        self.model = ONNXInference(model_path=model_path,
+                                   stride=32,
+                                   enable_trt_profile=enable_trt_profile,
+                                   max_batch_size=max_batch_size,
+                                   opt_batch_size=opt_batch_size,
+                                   input_image_size=input_image_size,
+                                   target_long_side=target_long_side,
+                                   execution_provider=execution_provider
+                                   )
 
-        self.image_processor = ImageProcessor(target_size=self.img_size,
-                                              stride=self.stride,
-                                              is_fixed_size=self.fix_image,
+        self.image_processor = ImageProcessor(target_size=self.model.img_size,
+                                              stride=self.model.stride,
+                                              is_fixed_size=self.model.fix_image,
                                               fill_value=144,
-                                              dtype=self.input_meta[0]['type'])
+                                              dtype=self.model.input_meta[0]['type'])
 
     def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw: bool = False) -> np.ndarray:
         """执行 YOLO 模型的推理。
@@ -86,22 +86,8 @@ class YoloObjInference(ONNXInference):
         processed_input, transform_params = self.image_processor(input_data)
 
         # 执行推理
-        outputs = super().__call__(processed_input)[0].astype(np.float32)
+        outputs = self.model(processed_input)[0].astype(np.float32)
         return outputs if raw else self.image_processor.restore_boxes(outputs, transform_params)
-
-    def __del__(self):
-        """清理资源"""
-        try:
-
-            if hasattr(self, 'session'):
-                del self.session
-
-        except Exception:
-            pass
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.__del__()
-        return False
 
 
 class AreaAvgInference(YoloObjInference):
@@ -353,7 +339,7 @@ class NumCountInference(YoloObjInference):
         return int(unique_counts[mode_index])
 
 
-class YoloSegInference(ONNXInference):
+class YoloSegInference:
     def __init__(self,
                  model_path: str,
                  enable_trt_profile: bool = False,
@@ -390,21 +376,21 @@ class YoloSegInference(ONNXInference):
         Raises:
             FileNotFoundError: 如果 `model_path` 指定的文件不存在。
         """
-        super().__init__(model_path=model_path,
-                         stride=32,
-                         enable_trt_profile=enable_trt_profile,
-                         max_batch_size=max_batch_size,
-                         opt_batch_size=opt_batch_size,
-                         input_image_size=input_image_size,
-                         target_long_side=target_long_side,
-                         execution_provider=execution_provider
-                         )
+        self.model = ONNXInference(model_path=model_path,
+                                   stride=32,
+                                   enable_trt_profile=enable_trt_profile,
+                                   max_batch_size=max_batch_size,
+                                   opt_batch_size=opt_batch_size,
+                                   input_image_size=input_image_size,
+                                   target_long_side=target_long_side,
+                                   execution_provider=execution_provider
+                                   )
 
-        self.image_processor = ImageProcessor(target_size=self.img_size,
-                                              stride=self.stride,
-                                              is_fixed_size=self.fix_image,
+        self.image_processor = ImageProcessor(target_size=self.model.img_size,
+                                              stride=self.model.stride,
+                                              is_fixed_size=self.model.fix_image,
                                               fill_value=144,
-                                              dtype=self.input_meta[0]['type'],
+                                              dtype=self.model.input_meta[0]['type'],
                                               uniform_transform=uniform_transform)
 
     def __call__(self, input_data: list[np.ndarray] | np.ndarray,
@@ -441,7 +427,7 @@ class YoloSegInference(ONNXInference):
         processed_input, transform_params = self.image_processor(input_data)
 
         # 执行推理
-        outputs = super().__call__(processed_input)
+        outputs =self.model(processed_input)
 
         detections, protos = outputs[0], outputs[1]
 

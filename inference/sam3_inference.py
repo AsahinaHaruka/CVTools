@@ -13,7 +13,7 @@ from .image_processor import ImageProcessor
 from .tokenizer import SimpleCLIPBPETokenizer
 
 
-class SAM3Inference(ONNXInference):
+class SAM3Inference:
     def __init__(self,
                  model_path: str,
                  vocab_file: str,
@@ -61,7 +61,7 @@ class SAM3Inference(ONNXInference):
         Raises:
             FileNotFoundError: 如果 `model_path` 指定的文件不存在。
         """
-        super().__init__(model_path=model_path,
+        self.model=ONNXInference(model_path=model_path,
                          stride=14,
                          enable_trt_profile=enable_trt_profile,  # 这里的 enable_trt_profile 应该直接传递
                          max_batch_size=max_batch_size,
@@ -80,12 +80,12 @@ class SAM3Inference(ONNXInference):
                                                 bpe_vocab_size=49152,
                                                 )
 
-        self.image_processor = ImageProcessor(target_size=self.img_size,
-                                              stride=self.stride,
-                                              is_fixed_size=self.fix_image,
+        self.image_processor = ImageProcessor(target_size=self.model.img_size,
+                                              stride=self.model.stride,
+                                              is_fixed_size=self.model.fix_image,
                                               norm_type='-1_1',
                                               fill_value=144,
-                                              dtype=self.input_meta[0]['type'])
+                                              dtype=self.model.input_meta[0]['type'])
 
     def __call__(self, input_data: dict[str, np.ndarray] | list[np.ndarray] | np.ndarray, prompt: str,
                  return_boxes: bool = True, return_masks: bool = True, raw: bool = False) -> dict:
@@ -125,7 +125,7 @@ class SAM3Inference(ONNXInference):
 
         processed_input, transform_params = self.image_processor(input_data)
 
-        outputs = super().__call__({
+        outputs = self.model({
             "pixel_values": processed_input,
             "input_ids": input_ids,
             "attention_mask": attention_mask,
