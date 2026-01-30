@@ -12,7 +12,7 @@ import numpy as np
 from inference.yolo_inference import YoloObjInference
 from tqdm import tqdm
 
-from ulit.logger import LoggerBuilder
+from utils.logger import LoggerBuilder
 
 logger = LoggerBuilder().get_logger(name="data_split")
 

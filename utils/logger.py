@@ -78,21 +78,21 @@ class LoggerBuilder:
     负责具体的 Handler 创建和 Formatter 配置
     """
 
-    DEBUG_FORMAT= "%(asctime)s | %(levelname)-8s | %(processName)s:%(process)d | %(filename)s:%(lineno)d | %(message)s"
-    DEFAULT_FORMAT= "%(asctime)s | %(levelname)-8s | %(processName)s:%(process)d | %(message)s"
+    DEBUG_FORMAT = "%(asctime)s | %(levelname)-8s | %(processName)s:%(process)d | %(filename)s:%(lineno)d | %(message)s"
+    DEFAULT_FORMAT = "%(asctime)s | %(levelname)-8s | %(processName)s:%(process)d | %(message)s"
 
     @staticmethod
     def _create_handlers(
-        log_dir: str,
-        log_filename: str | None,
-        console_output: bool,
-        file_rotation: str,
-        max_bytes: int,
-        backup_count: int,
-        when: str,
-        interval: int,
-        delay: bool,
-        format:str=DEFAULT_FORMAT,
+            log_dir: str,
+            log_filename: str | None,
+            console_output: bool,
+            file_rotation: str,
+            max_bytes: int,
+            backup_count: int,
+            when: str,
+            interval: int,
+            delay: bool,
+            format: str = DEFAULT_FORMAT,
     ) -> list[logging.Handler]:
         """内部方法：创建 Handler 列表"""
         handlers = []
@@ -143,17 +143,17 @@ class LoggerBuilder:
 
     @staticmethod
     def get_logger(
-        name: str = "root",
-        level: int = logging.INFO,
-        log_dir: str = "logs",
-        log_filename: str| None = None,
-        console_output: bool = True,
-        file_rotation: str = "size",  # 选项: 'size', 'time', 'none'
-        max_bytes: int = 10 * 1024 * 1024,  # 10MB
-        backup_count: int = 5,
-        when: str = "midnight",
-        interval: int = 1,
-        delay: bool = False,
+            name: str = "root",
+            level: int = logging.INFO,
+            log_dir: str = "logs",
+            log_filename: str | None = None,
+            console_output: bool = True,
+            file_rotation: str = "size",  # 选项: 'size', 'time', 'none'
+            max_bytes: int = 10 * 1024 * 1024,  # 10MB
+            backup_count: int = 5,
+            when: str = "midnight",
+            interval: int = 1,
+            delay: bool = False,
     ) -> logging.Logger:
         """
         获取一个配置好的 `logging.Logger` 实例，用于单进程日志记录。
@@ -183,11 +183,10 @@ class LoggerBuilder:
         logger = logging.getLogger(name)
         logger.setLevel(level)
 
-        if level==logging.DEBUG:
-            format=LoggerBuilder.DEBUG_FORMAT
+        if level == logging.DEBUG:
+            format = LoggerBuilder.DEBUG_FORMAT
         else:
-            format=LoggerBuilder.DEFAULT_FORMAT
-
+            format = LoggerBuilder.DEFAULT_FORMAT
 
         # 防止重复添加 Handler
         if not logger.handlers:
@@ -219,16 +218,16 @@ class MultiProcessLogManager:
 
     @staticmethod
     def init_main_listener(
-        level: int = logging.INFO,
-        log_dir: str = "logs",
-        log_filename: str = None,
-        console_output: bool = True,
-        file_rotation: str = "size",  # 选项: 'size', 'time', 'none'
-        max_bytes: int = 10 * 1024 * 1024,
-        backup_count: int = 5,
-        when: str = "midnight",
-        interval: int = 1,
-        delay: bool = False,
+            level: int = logging.INFO,
+            log_dir: str = "logs",
+            log_filename: str = None,
+            console_output: bool = True,
+            file_rotation: str = "size",  # 选项: 'size', 'time', 'none'
+            max_bytes: int = 10 * 1024 * 1024,
+            backup_count: int = 5,
+            when: str = "midnight",
+            interval: int = 1,
+            delay: bool = False,
     ) -> tuple[multiprocessing.Queue, QueueListener]:
         """
         【主进程调用】初始化队列监听器。
@@ -236,7 +235,7 @@ class MultiProcessLogManager:
         此方法在主进程中被调用，用于设置一个多进程安全的日志系统。
         它创建一个 `multiprocessing.Queue` 来收集来自子进程的日志消息，
         并启动一个 `QueueListener` 来将这些消息写入到配置好的日志目标（控制台、文件）。
-        如果主进程有Handler, 会自动将主进程已有的 Handler 移动到 Listener 中，避免文件冲突。
+        如果主进程有Handler, 会自动将主进程已有的 Handler 清除，避免文件冲突。
 
         Args:
             level (int): 日志记录的最低级别。例如 `logging.INFO`。默认为 `logging.INFO`。
@@ -276,10 +275,10 @@ class MultiProcessLogManager:
 
         root = logging.getLogger()
         root.setLevel(level)
-        if level==logging.DEBUG:
-            _format=LoggerBuilder.DEBUG_FORMAT
+        if level == logging.DEBUG:
+            _format = LoggerBuilder.DEBUG_FORMAT
         else:
-            _format=LoggerBuilder.DEFAULT_FORMAT
+            _format = LoggerBuilder.DEFAULT_FORMAT
         handlers = []
 
         # 检查并清理 Root Logger 的现有 Handler
@@ -315,7 +314,7 @@ class MultiProcessLogManager:
 
     @staticmethod
     def configure_worker(
-        queue: multiprocessing.queues.Queue | None = None, level: int = logging.INFO
+            queue: multiprocessing.queues.Queue | None = None, level: int = logging.INFO
     ) -> None:
         """
         【子进程调用】配置当前进程的日志发送端。

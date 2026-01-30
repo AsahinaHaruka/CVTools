@@ -12,7 +12,7 @@ from tqdm import tqdm
 from inference.yolo_inference import YoloSegInference
 
 
-from ulit.logger import LoggerBuilder
+from utils.logger import LoggerBuilder
 logger = LoggerBuilder().get_logger(name="yolo_seg")
 
 

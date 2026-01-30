@@ -5,7 +5,6 @@
 @Date ：2025/8/16 16:45
 """
 import os
-import sys
 import time
 
 import cv2
@@ -15,8 +14,8 @@ import numpy as np
 import multiprocessing
 from tqdm import tqdm
 
-from ulit.perspective_transformation import PerspectiveTransformer
-from ulit.logger import LoggerBuilder
+from utils.perspective_transformation import PerspectiveTransformer
+from utils.logger import LoggerBuilder
 
 logger = LoggerBuilder().get_logger(name="data_split")
 

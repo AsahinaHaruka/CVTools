@@ -8,7 +8,7 @@ import numpy as np
 
 from .base_inference import ONNXInference
 from .image_processor import ImageProcessor
-from ulit.data_define import Area
+from utils.data_define import Area
 
 
 class YoloObjInference(ONNXInference):
@@ -409,6 +409,7 @@ class YoloSegInference(ONNXInference):
 
     def __call__(self, input_data: list[np.ndarray] | np.ndarray,
                  conf_threshold: float = 0.25,
+                 mask_threshold: float = 0.5,
                  return_boxes: bool = True,
                  return_masks: bool = True,
                  raw: bool = False) -> dict[str, list[np.ndarray] | np.ndarray]:
@@ -422,6 +423,7 @@ class YoloSegInference(ONNXInference):
                 可以是单个 NumPy 数组 `(H, W)` 或 `(H, W, C)`，
                 也可以是包含多个 NumPy 数组的列表，每个数组代表一张图像。
             conf_threshold (float): 置信度阈值。默认为 0.25。
+            mask_threshold (float, optional): Mask 二值化的阈值。默认为 0.5。
             return_boxes (bool, optional): 是否在结果中包含边界框。默认为 True。
             return_masks (bool, optional): 是否在结果中包含分割掩码。默认为 True。
             raw (bool, optional): 是否返回原始模型输出。
@@ -506,7 +508,7 @@ class YoloSegInference(ONNXInference):
                 masks=batch_raw_masks,  # List[np.ndarray]
                 transform_params=transform_params,
                 boxes=[b[:, :4] for b in batch_raw_boxes],
-                mask_threshold=0.5,
+                mask_threshold=mask_threshold,
                 uniform_transform=False
             )
 

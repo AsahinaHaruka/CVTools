@@ -10,7 +10,7 @@
     *   [sam3_inference.py](inference/sam3_inference.py): SAM3模型推理。
     *   [tokenizer.py](inference/tokenizer.py): SAM3的文本编码器。
     *   [image_processor.py](inference/image_processor.py): SAM3的图像处理器。
-*   [ulit](ulit): 通用工具模块。
+*   [utils](utils): 通用工具模块。
     *   [perspective_transformation.py](ulit/perspective_transformation.py): 对图像进行透视变换的类。
     *   [logger.py](ulit/logger.py): 日志工具。
     *   [data_define.py](ulit/data_define.py): 通用数据结构定义。
@@ -20,7 +20,7 @@
 *   [data_split.py](data_split.py): 随机拆分训练集和测试集。
 *   [show_yolo_obj_image.py](show_yolo_obj_image.py): 可视化YOLO目标检测的标注。
 *   [show_yolo_seg_image.py.py](show_yolo_seg_image.py.py): 可视化YOLO实例分割的标注。
-
+*   [rtsp_video.py](rtsp_video.py): RTSP拉流（**修改后待测试**）。
 ## 安装与使用
 
 1.  **安装依赖**
