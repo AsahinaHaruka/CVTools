@@ -104,7 +104,7 @@ def prepare_perspective_for_video(video_path: str, cache: dict,
 
 
 def extract_frames(video_path: str, output_dir: str, video_name: str, persp_cfg: dict | None = None,
-                   worker_id: int = 0):
+                   worker_id: int = 0, extract_fps: float = 1.0):
     time.sleep(worker_id * 0.1)
 
     if not os.path.exists(output_dir):
@@ -117,7 +117,15 @@ def extract_frames(video_path: str, output_dir: str, video_name: str, persp_cfg:
 
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     fps_val = cap.get(cv2.CAP_PROP_FPS)
-    fps = int(fps_val) if fps_val and fps_val > 0 else 1
+    video_fps = fps_val if fps_val and fps_val > 0 else 1.0
+
+    # 防止除以 0 或负数
+    if extract_fps <= 0:
+        extract_fps = 1.0
+
+    interval = int(round(video_fps / extract_fps))
+    if interval < 1:
+        interval = 1
 
     transformer = None
     if persp_cfg:
@@ -156,7 +164,7 @@ def extract_frames(video_path: str, output_dir: str, video_name: str, persp_cfg:
 
         # 如果成功读到帧，重置错误计数器
         consecutive_errors = 0
-        if i % fps != 0:
+        if i % interval != 0:
             continue
 
         if transformer:
@@ -170,7 +178,7 @@ def extract_frames(video_path: str, output_dir: str, video_name: str, persp_cfg:
 
 
 def process_videos(video_dir: str, output_dir: str, enable_perspective: bool = False,
-                   output_size: tuple[int, int] | None = None):
+                   output_size: tuple[int, int] | None = None, extract_fps: float = 1.0):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
 
@@ -211,7 +219,7 @@ def process_videos(video_dir: str, output_dir: str, enable_perspective: bool = F
                 output_subdir = os.path.join(output_dir, os.path.splitext(vf)[0])
 
                 pool.apply_async(extract_frames,
-                                 args=(video_path, output_subdir, os.path.splitext(vf)[0], cfg, worker_id))
+                                 args=(video_path, output_subdir, os.path.splitext(vf)[0], cfg, worker_id, extract_fps))
                 worker_id += 1
 
             # 点选全部完成后再写缓存并等待后台任务收尾
@@ -239,7 +247,7 @@ def process_videos(video_dir: str, output_dir: str, enable_perspective: bool = F
             video_path = os.path.join(video_dir, video_file)
             output_subdir = os.path.join(output_dir, os.path.splitext(video_file)[0])
             pool.apply_async(extract_frames,
-                             args=(video_path, output_subdir, os.path.splitext(video_file)[0], None, i))
+                             args=(video_path, output_subdir, os.path.splitext(video_file)[0], None, i, extract_fps))
 
         pool.close()
         pool.join()
@@ -256,6 +264,8 @@ def parse_args():
                         help="开启首帧选点并对整段视频做透视变换")
     parser.add_argument("-oz", "--output-size", type=int, nargs=2, metavar=('WIDTH', 'HEIGHT'),
                         help="指定透视变换后的输出图像尺寸 (宽 高)，例如: --output-size 1920 1080")
+    parser.add_argument("-f", "--fps", type=float, default=1.0,
+                        help="每秒提取的帧数 (默认: 1.0)")
 
     return parser.parse_args()
 
@@ -273,6 +283,7 @@ if __name__ == "__main__":
 
     process_videos(args.input, args.output,
                    enable_perspective=args.perspective,
-                   output_size=tuple(args.output_size) if args.output_size else None)
+                   output_size=tuple(args.output_size) if args.output_size else None,
+                   extract_fps=args.fps)
 
     logger.info("Frame extraction completed.")

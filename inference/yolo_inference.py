@@ -325,7 +325,7 @@ class NumCountInference(YoloObjInference):
         # Get raw inference output: [batch, 300, 6] where 6 = (x1,y1,x2,y2,score,class)
         raw_output = super().__call__(input_data, raw=raw)
 
-        # 所有batch的钢坯数量计数
+        # 所有batch的数量计数
         confidence_mask = raw_output[:, :, 4] >= self.confidence  # [batch, 300]
         batch_counts = np.sum(confidence_mask, axis=1)  # [batch]
 
@@ -452,16 +452,14 @@ class YoloSegInference:
             det = det[keep]
 
             if len(det) == 0:
-                if return_boxes or return_masks:
-                    batch_raw_boxes.append(np.zeros((0, det.shape[1]), dtype=np.float32))
+                batch_raw_boxes.append(np.zeros((0, det.shape[1]), dtype=np.float32))
 
                 if return_masks:
                     _, mh, mw = proto.shape
                     batch_raw_masks.append(np.zeros((0, mh, mw), dtype=np.float32))
                 continue
 
-            if return_boxes or return_masks:
-                batch_raw_boxes.append(det)
+            batch_raw_boxes.append(det)
 
             if return_masks:
                 mask_coefficients = det[:, 6:]
