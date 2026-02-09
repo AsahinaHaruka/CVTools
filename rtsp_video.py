@@ -171,6 +171,8 @@ class Video:
 
     def __getitem__(self, item):
         with self._lock:
+            if isinstance(item, int):
+                return self.buffer[item]
             return list(self.buffer)[item]
 
     def __len__(self):
