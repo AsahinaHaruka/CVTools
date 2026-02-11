@@ -53,7 +53,7 @@
         ```
     * **使用 GPU 进行模型推理**
         ```bash
-        uv sync --extra onnx-gpu --extra sam
+        uv sync --extra onnx-gpu
         ```
     * **推理SAM模型**
       ```bash
@@ -114,19 +114,23 @@ tasks", allowing you to install exactly what you need based on your hardware.
 
    Choose **one** of the following commands based on your requirements:
 
-    * **Scenario A: Basic image processing only (No ONNX inference)**
+    * **Basic image processing only (No ONNX inference)**
         ```bash
         uv sync
         ```
-    * **Scenario B: CPU inference for YOLO**
+    * **CPU inference**
         ```bash
         uv sync --extra onnx-cpu
         ```
-    * **Scenario C: GPU (NVIDIA) inference for YOLO and SAM3**
+    * **GPU (NVIDIA) inference**
+        ```bash
+        uv sync --extra onnx-gpu
+        ```
+    * **inference SAM**
         ```bash
         uv sync --extra onnx-gpu --extra sam
         ```
-    * **Scenario D: Install everything**
+    * **Install everything**
         ```bash
         uv sync --all-extras
         ```
