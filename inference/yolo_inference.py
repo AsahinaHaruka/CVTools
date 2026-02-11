@@ -28,7 +28,7 @@ class YoloObjInference:
 
         Args:
             model_path (str): ONNX 模型文件的路径，该模型应包含 NMS (Non-Maximum Suppression) 操作。
-            enable_trt_profile (bool, optional): 是否启用 TensorRT 动态形状配置文件生成。
+            enable_trt_profile (bool, optional): 是否启用 TensorRT 动态形状固定化优化。
                 如果为 True，将根据 batch size 和尺寸参数预热 TensorRT 引擎缓存。
                 当此参数为 True 时，无论是否提供 `input_image_size`，`fix_image` 都将被设置为 True。
                 默认为 False。

@@ -46,7 +46,7 @@ class ONNXInference:
 
         Args:
             model_path (str): ONNX 模型文件的路径。
-            enable_trt_profile (bool, optional): 是否启用 TensorRT 动态形状配置文件生成。
+            enable_trt_profile (bool, optional): 是否启用 TensorRT 动态形状固定化优化。
                 如果为 True，将根据 batch size 和尺寸参数预热 TensorRT 引擎缓存，
                 该参数为True时无论是否提供input_image_size，fix_image为True。默认为 False。
             stride (int, optional): 模型步长，用于计算对齐后的输入尺寸。默认为 32。
@@ -132,8 +132,9 @@ class ONNXInference:
             })
 
         available_providers = ort.get_available_providers()
-        print(f"ℹ️ [Init] 系统当前可用后端: {available_providers}")
+        # print(f"ℹ️ [Init] 系统当前可用后端: {available_providers}")
         providers = []
+
         # TensorRT
         if "trt" in execution_provider and "TensorrtExecutionProvider" in available_providers:
             # 只有当环境支持 TRT 时，才传入配置好的 trt_provider_options
@@ -144,10 +145,7 @@ class ONNXInference:
             providers.append("CUDAExecutionProvider")
 
         # CoreML
-        if (
-                "CoreML" in execution_provider
-                and "CoreMLExecutionProvider" in available_providers
-        ):
+        if "CoreML" in execution_provider and "CoreMLExecutionProvider" in available_providers:
             providers.append((
                 "CoreMLExecutionProvider",
                 {
@@ -160,7 +158,7 @@ class ONNXInference:
             )
 
         # CPU
-        if "cpu" in execution_provider and "CPUExecutionProvider" in available_providers:
+        if "cpu" in execution_provider:
             providers.append("CPUExecutionProvider")
 
         # 3. 创建正式的推理 Session
@@ -239,8 +237,7 @@ class ONNXInference:
 
         if input_wh is None:
             if new_h != target_long or new_w != target_long:
-                print(
-                    f"⚠️ [WARNING] 图片尺寸[{target_long}, {target_long}] 需要被 stride「{stride}」整除, 向上取整到[{new_h}, {new_w}]")
+                print(f"⚠️ [WARNING] 图片尺寸[{target_long}, {target_long}] 需要被 stride「{stride}」整除, 向上取整到[{new_h}, {new_w}]")
 
         return new_h, new_w
 

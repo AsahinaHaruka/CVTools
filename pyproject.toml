@@ -1,16 +1,26 @@
 [project]
 name = "cvtools"
 version = "0.1.0"
-description = "Add your description here"
-requires-python = ">=3.13"
+description = "A computer vision toolkit."
+readme = "README.md"
+requires-python = ">=3.10"
 dependencies = [
     "tqdm>=4.67.1",
     "opencv-python>=4.7.0.72"
 ]
 [project.optional-dependencies]
-inference = [
+onnx-core = [
     "onnx>=1.19.1",
-    "onnxslim>= 0.1.74",
-    "onnxruntime-gpu>=1.23.2",
+    "onnxslim>=0.1.74",
+]
+onnx-cpu = [
+    "cvtools[onnx-core]",
+    "onnxruntime>=1.23.2"
+]
+onnx-gpu = [
+    "cvtools[onnx-core]",
+    "onnxruntime-gpu>=1.23.2"
+]
+sam = [
     "regex"
 ]
