@@ -6,7 +6,7 @@
 """
 import os
 import time
-
+import shutil
 import cv2
 import json
 import argparse
@@ -177,95 +177,117 @@ def extract_frames(video_path: str, output_dir: str, video_name: str, persp_cfg:
     cap.release()
 
 
-def process_videos(video_dir: str, output_dir: str, enable_perspective: bool = False,
-                   output_size: tuple[int, int] | None = None, extract_fps: float = 1.0):
+def process_videos(input_path: str, output_dir: str, enable_perspective: bool = False,
+                   output_size: tuple[int, int] | None = None, extract_fps: float = 1.0,
+                   force_overwrite: bool = False):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
 
-    video_files = [f for f in os.listdir(video_dir)
-                   if (os.path.splitext(f)[1].lower() in VIDEO_EXTENSIONS and not f.startswith('.'))]
-    video_files.sort()
+    video_files = []
 
-    have_processed = [f for f in os.listdir(output_dir) if os.path.isdir(os.path.join(output_dir, f))]
+    # 支持单文件或文件夹逻辑
+    if os.path.isfile(input_path):
+        video_dir = os.path.dirname(input_path) or '.'
+        file_name = os.path.basename(input_path)
+        if os.path.splitext(file_name)[1].lower() in VIDEO_EXTENSIONS and not file_name.startswith('.'):
+            video_files.append(file_name)
+        else:
+            logger.error(f"❌ 输入的文件不是支持的视频格式: {input_path}")
+            return
+    elif os.path.isdir(input_path):
+        video_dir = input_path
+        video_files = [f for f in os.listdir(video_dir)
+                       if (os.path.splitext(f)[1].lower() in VIDEO_EXTENSIONS and not f.startswith('.'))]
+        video_files.sort()
+    else:
+        logger.error(f"❌ 输入路径不存在: {input_path}")
+        return
 
-    tqdm_lock = multiprocessing.RLock()
+    if not video_files:
+        logger.warning(f"⚠️ 在 {input_path} 中没有找到有效的视频文件。")
+        return
 
+    # 透视变换缓存逻辑
+    points_cache = {}
+    cache_path = os.path.join(output_dir, "points_cache.json")
     if enable_perspective:
-        # 主进程交互取点；每得到一段视频的参数，立刻把处理任务丢到后台进程池
-        cache_path = os.path.join(output_dir, "points_cache.json")
         if os.path.exists(cache_path):
             try:
                 with open(cache_path, "r", encoding="utf-8") as fr:
                     points_cache = json.load(fr)
-            except Exception:
+            except Exception as e:
+                logger.warning(f"{e}\n⚠️ 读取透视点缓存失败，将创建新缓存。")
                 points_cache = {}
-        else:
-            points_cache = {}
-        pool = multiprocessing.Pool(
-            initializer=pool_init,
-            initargs=(tqdm_lock,)
-        )
 
-        try:
-            worker_id = 0
-            for vf in video_files:
-                if os.path.splitext(vf)[0] in have_processed:
-                    logger.info(f"跳过已处理：{vf}")
+    tqdm_lock = multiprocessing.RLock()
+    pool = multiprocessing.Pool(initializer=pool_init, initargs=(tqdm_lock,))
+
+    try:
+        worker_id = 0
+        for vf in video_files:
+            video_name = os.path.splitext(vf)[0]
+            output_subdir = os.path.join(output_dir, video_name)
+
+            if os.path.exists(output_subdir):
+                if not force_overwrite:
+                    logger.info(f"⏭️ 跳过已处理：{os.path.basename(output_subdir)}")
                     continue
-                video_path = os.path.join(video_dir, vf)
+                else:
+                    logger.warning(f"🔄 覆盖已存在：{os.path.basename(output_subdir)}")
+                    shutil.rmtree(output_subdir)  # 清空旧文件，防止残余
+
+            video_path = os.path.join(video_dir, vf)
+            cfg = None
+
+            #  如果开启了透视，进行首帧选点
+            if enable_perspective:
                 cfg = prepare_perspective_for_video(video_path, points_cache, output_size)
                 if cfg is None:
+                    logger.info(f"用户取消选点或首帧损坏,跳过{video_name}")
                     continue
-                output_subdir = os.path.join(output_dir, os.path.splitext(vf)[0])
 
-                pool.apply_async(extract_frames,
-                                 args=(video_path, output_subdir, os.path.splitext(vf)[0], cfg, worker_id, extract_fps))
-                worker_id += 1
+            # 提交后台进程任务
+            pool.apply_async(extract_frames,
+                             args=(video_path, output_subdir, video_name, cfg, worker_id, extract_fps))
+            worker_id += 1
 
-            # 点选全部完成后再写缓存并等待后台任务收尾
+        #  如果是透视模式，所有选点完成后写入缓存
+        if enable_perspective:
             try:
                 with open(cache_path, "w", encoding="utf-8") as fw:
                     json.dump(points_cache, fw, ensure_ascii=False, indent=2)
-            except Exception as e:
-                logger.warning(f"⚠️ 写入缓存失败: {e}")
+            except Exception:
+                logger.exception("⚠️ 写入透视点缓存失败")
 
-        except Exception as e:
-            logger.error(f"❌ 任务处理出错 -> {e}")
+    except Exception:
+        logger.exception("❌ 任务分发处理出错")
 
-        logger.info("\n>>>🚀 所有点选完成，后台处理中... (请勿关闭窗口)\n")
-        pool.close()
-        pool.join()
-        logger.info("\n所有处理已完成。")
-
-    else:
-        pool = multiprocessing.Pool(
-            initializer=pool_init,
-            initargs=(tqdm_lock,)
-        )
-
-        for i, video_file in enumerate(video_files):
-            video_path = os.path.join(video_dir, video_file)
-            output_subdir = os.path.join(output_dir, os.path.splitext(video_file)[0])
-            pool.apply_async(extract_frames,
-                             args=(video_path, output_subdir, os.path.splitext(video_file)[0], None, i, extract_fps))
-
-        pool.close()
-        pool.join()
+    logger.info("🚀 所有任务已提交，后台处理中... (请勿关闭窗口)\n")
+    pool.close()
+    pool.join()
+    logger.info("✅ 所有处理已完成。")
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Extract 1 FPS frames, optional perspective warp.")
+    parser = argparse.ArgumentParser(description="Extract video frames, optional perspective warp.")
     parser.add_argument('-i', '--input', type=str, required=True,
-                        help="包含视频的目录路径")
+                        help="视频目录路径，或单个视频的文件路径")
     parser.add_argument('-o', '--output', type=str, required=True,
                         help="保存帧图像的目录路径")
-    parser.add_argument("--perspective", action="store_true",
-                        default=False,
+    parser.add_argument("--perspective", action="store_true", default=False,
                         help="开启首帧选点并对整段视频做透视变换")
     parser.add_argument("-oz", "--output-size", type=int, nargs=2, metavar=('WIDTH', 'HEIGHT'),
                         help="指定透视变换后的输出图像尺寸 (宽 高)，例如: --output-size 1920 1080")
-    parser.add_argument("-f", "--fps", type=float, default=1.0,
-                        help="每秒提取的帧数 (默认: 1.0)")
+
+    # 互斥参数组：支持设置 fps 或者直接设置间隔秒数
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("-f", "--fps", type=float, default=1.0,
+                       help="每秒提取的帧数 (默认: 1.0)")
+    group.add_argument("-s", "--interval-seconds", type=float,
+                       help="每隔多少秒提取一帧 (例如: -s 2 表示每2秒提取1帧)")
+
+    parser.add_argument("--force", action="store_true", default=False,
+                        help="强制覆盖已处理的视频文件夹 (默认会跳过已存在的)")
 
     return parser.parse_args()
 
@@ -281,9 +303,15 @@ if __name__ == "__main__":
         if any('\u4e00' <= ch <= '\u9fff' for ch in args.output):
             logger.warning('⚠️ 警告：输出目录包含中文，建议使用英文路径\n')
 
+    # 处理秒数到 fps 的换算
+    final_fps = args.fps
+    if args.interval_seconds:
+        final_fps = 1.0 / args.interval_seconds
+
     process_videos(args.input, args.output,
                    enable_perspective=args.perspective,
                    output_size=tuple(args.output_size) if args.output_size else None,
-                   extract_fps=args.fps)
+                   extract_fps=final_fps,
+                   force_overwrite=args.force)
 
     logger.info("Frame extraction completed.")
