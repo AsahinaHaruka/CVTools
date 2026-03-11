@@ -79,8 +79,11 @@ class ONNXInference:
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"Model not found: {model_path}")
 
+        with open(model_path, "rb") as f:
+            model_bytes = f.read()
+
         # 预分析模型结构 有几个输入，哪些是图像，哪些是动态的
-        self.input_meta, self.output_names = self._scan_model_io()
+        self.input_meta, self.output_names = self._scan_model_io(model_bytes)
 
         fixed_h, fixed_w = self._check_static_shape()
 
@@ -167,12 +170,13 @@ class ONNXInference:
         session_options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
         session_options.log_severity_level = 3
 
-        self.session = ort.InferenceSession(model_path, sess_options=session_options, providers=providers)
+        self.session = ort.InferenceSession(model_bytes, sess_options=session_options, providers=providers)
         print(f"ℹ️ [Init] 模型加载成功! 运行设备: {self.session.get_providers()[0]}")
 
-    def _scan_model_io(self):
+    @staticmethod
+    def _scan_model_io(model_bytes: bytes):
         """扫描模型的输入输出元数据"""
-        temp_sess = ort.InferenceSession(self.model_path, providers=['CPUExecutionProvider'])
+        temp_sess = ort.InferenceSession(model_bytes, providers=['CPUExecutionProvider'])
 
         inputs = []
         for inp in temp_sess.get_inputs():
@@ -235,9 +239,12 @@ class ONNXInference:
         new_h = int(math.ceil(raw_h / stride) * stride)
         new_w = int(math.ceil(raw_w / stride) * stride)
 
-        if input_wh is None:
-            if new_h != target_long or new_w != target_long:
-                print(f"⚠️ [WARNING] 图片尺寸[{target_long}, {target_long}] 需要被 stride「{stride}」整除, 向上取整到[{new_h}, {new_w}]")
+        # 计算预期的基础整数尺寸 (四舍五入)，用于和对齐后的尺寸对比
+        expected_h = int(round(raw_h))
+        expected_w = int(round(raw_w))
+
+        if new_h != expected_h or new_w != expected_w:
+            print(f"⚠️ [WARNING] 图片尺寸[{expected_h}, {expected_w}] 需要被 stride「{stride}」整除, 向上取整到[{new_h}, {new_w}]")
 
         return new_h, new_w
 

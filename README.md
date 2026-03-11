@@ -16,7 +16,7 @@
     * [yolo_inference.py](inference/yolo_inference.py): YOLO模型推理。
     * [sam3_inference.py](inference/sam3_inference.py): SAM3模型推理。
     * [tokenizer.py](inference/tokenizer.py): SAM3的文本编码器。
-    * [image_processor.py](inference/image_processor.py): SAM3的图像处理器。
+    * [image_processor.py](inference/image_processor.py): 图像处理器。
 * [utils](utils): 通用工具模块。
     * [perspective_transformation.py](utils/perspective_transformation.py): 对图像进行透视变换的类。
     * [logger.py](utils/logger.py): 日志工具。
@@ -85,7 +85,7 @@ installation of hardware acceleration backends.
     * [yolo_inference.py](inference/yolo_inference.py): Inference for YOLO models.
     * [sam3_inference.py](inference/sam3_inference.py): Inference for SAM3 models.
     * [tokenizer.py](inference/tokenizer.py): Text encoder for SAM3.
-    * [image_processor.py](inference/image_processor.py): Image processor for SAM3.
+    * [image_processor.py](inference/image_processor.py): Image processor.
 * [utils](utils): General utility module.
     * [perspective_transformation.py](utils/perspective_transformation.py): A class for performing perspective
       transformation on an image.
