@@ -6,6 +6,7 @@
 """
 import cv2
 import numpy as np
+from typing import overload
 
 
 def zero2one(input_tensor: np.ndarray) -> np.ndarray:
@@ -366,6 +367,20 @@ class ImageProcessor:
         return res
 
     @staticmethod
+    @overload
+    def restore_boxes(detections: np.ndarray,
+                      transform_params: list[dict],
+                      box_format: str = 'xyxy') -> np.ndarray:
+        ...
+
+    @staticmethod
+    @overload
+    def restore_boxes(detections: list[np.ndarray],
+                      transform_params: list[dict],
+                      box_format: str = 'xyxy') -> list[np.ndarray]:
+        ...
+
+    @staticmethod
     def restore_boxes(detections: np.ndarray | list[np.ndarray],
                       transform_params: list[dict],
                       box_format: str = 'xyxy') -> np.ndarray | list[np.ndarray]:
@@ -654,9 +669,9 @@ class ImageProcessor:
         return list(final_output_flat.reshape(batch_size, num_queries, orig_h, orig_w))
 
     @staticmethod
-    def _restore_masks_sequential(masks: np.ndarray | list,
+    def _restore_masks_sequential(masks: np.ndarray | list[np.ndarray],
                                   transform_params: list[dict],
-                                  boxes: np.ndarray | list | None,
+                                  boxes: np.ndarray | list[np.ndarray] | None,
                                   box_format: str,
                                   mask_threshold: float) -> list[np.ndarray]:
         """
@@ -665,9 +680,9 @@ class ImageProcessor:
         逐张图片处理，适用于变换参数不一致或 Ragged Batch 的情况。
 
         Args:
-            masks (np.ndarray | list): Mask 数据。
+            masks (np.ndarray | list[np.ndarray]): Mask 数据。
             transform_params (list[dict]): 变换参数列表。
-            boxes (np.ndarray | list | None): 检测框数据。
+            boxes (np.ndarray | list[np.ndarray]| None): 检测框数据。
             box_format (str): 用于指定 boxes 的格式。
             mask_threshold (float): 二值化阈值。
 

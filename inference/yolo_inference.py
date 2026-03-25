@@ -4,6 +4,7 @@
 @Author ：Haruka
 @Date ：2025/8/22 08:58
 """
+from typing import overload, Literal
 import numpy as np
 
 from .base_inference import ONNXInference
@@ -393,6 +394,24 @@ class YoloSegInference:
                                               dtype=self.model.input_meta[0]['type'],
                                               uniform_transform=uniform_transform)
 
+    @overload
+    def __call__(self, input_data: list[np.ndarray] | np.ndarray,
+                 conf_threshold: float = 0.25,
+                 mask_threshold: float = 0.5,
+                 return_boxes: bool = True,
+                 return_masks: bool = True,
+                 raw: Literal[True] = ...) -> dict[str, np.ndarray]:
+        ...
+
+    @overload
+    def __call__(self, input_data: list[np.ndarray] | np.ndarray,
+                 conf_threshold: float = 0.25,
+                 mask_threshold: float = 0.5,
+                 return_boxes: bool = True,
+                 return_masks: bool = True,
+                 raw: Literal[False] = ...) -> dict[str, list[np.ndarray]]:
+        ...
+
     def __call__(self, input_data: list[np.ndarray] | np.ndarray,
                  conf_threshold: float = 0.25,
                  mask_threshold: float = 0.5,
@@ -427,7 +446,7 @@ class YoloSegInference:
         processed_input, transform_params = self.image_processor(input_data)
 
         # 执行推理
-        outputs =self.model(processed_input)
+        outputs = self.model(processed_input)
 
         detections, protos = outputs[0], outputs[1]
 
