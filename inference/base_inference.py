@@ -7,11 +7,14 @@
 import math
 import os
 from typing import Sequence
+import logging
 
 import onnxruntime as ort
 import numpy as np
 from numpy import ndarray
 from onnxruntime import SparseTensor
+
+logger = logging.getLogger(__name__)
 
 # 使用字典映射动态获取模型输入的数据类型
 DTYPE_MAPPING = {
@@ -31,8 +34,9 @@ class ONNXInference:
             model_path: str,
             enable_trt_profile: bool = False,
             stride: int = 32,
-            max_batch_size: int = 5,
+            min_batch_size: int = 1,
             opt_batch_size: int = 5,
+            max_batch_size: int = 5,
             input_image_size: tuple[int, int] | None = None,
             target_long_side: int = 640,
             other_size: tuple[int, int, int] = (0, 100, 200),
@@ -50,9 +54,11 @@ class ONNXInference:
                 如果为 True，将根据 batch size 和尺寸参数预热 TensorRT 引擎缓存，
                 该参数为True时无论是否提供input_image_size，fix_image为True。默认为 False。
             stride (int, optional): 模型步长，用于计算对齐后的输入尺寸。默认为 32。
-            max_batch_size (int, optional): 预期的最大 Batch Size。
-                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。默认为 5。
+            min_batch_size (int, optional): 预期的最小 Batch Size。
+                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。默认为 1。
             opt_batch_size (int, optional): 预期的最优 Batch Size。
+                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。默认为 5。
+            max_batch_size (int, optional): 预期的最大 Batch Size。
                 仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。默认为 5。
             input_image_size (tuple[int, int] | None, optional): 原始输入图像的分辨率 (Width, Height)。
                 如果提供，将基于 `target_long_side` 计算最佳矩形推理尺寸 (Rectangular Inference)，此时fix_image为True。
@@ -70,6 +76,7 @@ class ONNXInference:
         """
         self.model_path = model_path
         self.stride = stride
+        self.min_batch_size = min_batch_size
         self.max_batch_size = max_batch_size
         self.opt_batch_size = opt_batch_size
         self.target_long_side = target_long_side
@@ -92,7 +99,7 @@ class ONNXInference:
             self.img_size = (fixed_h, fixed_w)
             self.fix_image = True
 
-            print(f"ℹ️ [Init] 检测到模型图像输入尺寸固定，强制使用固定图像输入: {self.img_size}")
+            logger.info(f"ℹ️ [Init] 检测到模型图像输入尺寸固定，强制使用固定图像输入: {self.img_size}")
 
         else:
             self.img_size = self._get_inference_size(
@@ -101,9 +108,10 @@ class ONNXInference:
                 input_image_size
             )
             if self.fix_image:
-                print(f"ℹ️ [Init] 使用固定推理尺寸。尺寸计算: 输入图片尺寸{input_image_size}，目标长边 {target_long_side} -> 计算推理尺寸 {self.img_size}")
+                logger.info(
+                    f"ℹ️ [Init] 使用固定推理尺寸。尺寸计算: 输入图片尺寸{input_image_size}，目标长边 {target_long_side} -> 计算推理尺寸 {self.img_size}")
             else:
-                print(f"ℹ️ [Init] 使用动态推理尺寸。目标长边 {target_long_side}")
+                logger.info(f"ℹ️ [Init] 使用动态推理尺寸。目标长边 {target_long_side}")
 
         trt_provider_options = {
             'device_id': 0,
@@ -117,7 +125,7 @@ class ONNXInference:
 
             if trt_profile_options:
                 if trt_profile_options:
-                    print(f"ℹ️ [Init] 设置TensorRT 动态形状优化参数:\n"
+                    logger.info(f"ℹ️ [Init] 设置TensorRT 动态形状优化参数:\n"
                           f"   Min: {trt_profile_options['trt_profile_min_shapes']}\n"
                           f"   Opt: {trt_profile_options['trt_profile_opt_shapes']}\n"
                           f"   Max: {trt_profile_options['trt_profile_max_shapes']}")
@@ -135,7 +143,7 @@ class ONNXInference:
             })
 
         available_providers = ort.get_available_providers()
-        # print(f"ℹ️ [Init] 系统当前可用后端: {available_providers}")
+        logger.debug(f"ℹ️ [Init] 系统当前可用后端: {available_providers}")
         providers = []
 
         # TensorRT
@@ -171,7 +179,7 @@ class ONNXInference:
         session_options.log_severity_level = 3
 
         self.session = ort.InferenceSession(model_bytes, sess_options=session_options, providers=providers)
-        print(f"ℹ️ [Init] 模型加载成功! 运行设备: {self.session.get_providers()[0]}")
+        logger.info(f"ℹ️ [Init] 模型加载成功! 运行设备: {self.session.get_providers()[0]}")
 
     @staticmethod
     def _scan_model_io(model_bytes: bytes):
@@ -185,8 +193,11 @@ class ONNXInference:
                 'shape': inp.shape,
                 'type': DTYPE_MAPPING.get(inp.type, np.float32)
             })
+        logger.debug(f"Input Meta {inputs}")
 
         output_names = [out.name for out in temp_sess.get_outputs()]
+        logger.debug(f"Output Names {output_names}")
+
         del temp_sess
         return inputs, output_names
 
@@ -244,7 +255,8 @@ class ONNXInference:
         expected_w = int(round(raw_w))
 
         if new_h != expected_h or new_w != expected_w:
-            print(f"⚠️ [WARNING] 图片尺寸[{expected_h}, {expected_w}] 需要被 stride「{stride}」整除, 向上取整到[{new_h}, {new_w}]")
+            logger.warning(
+                f"⚠️ [WARNING] 图片尺寸[{expected_h}, {expected_w}] 需要被 stride「{stride}」整除, 向上取整到[{new_h}, {new_w}]")
 
         return new_h, new_w
 
@@ -274,7 +286,7 @@ class ONNXInference:
                 elif isinstance(dim, str):
                     # 动态维度
                     if idx == 0:  # Batch Size
-                        p_min.append(1)
+                        p_min.append(self.min_batch_size)
                         p_opt.append(self.opt_batch_size)
                         p_max.append(self.max_batch_size)
                     elif len(shape) == 4 and idx in [2, 3]:

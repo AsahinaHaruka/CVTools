@@ -16,8 +16,10 @@ class YoloObjInference:
     def __init__(self,
                  model_path: str,
                  enable_trt_profile: bool = False,
-                 max_batch_size: int = 5,
+                 stride: int = 32,
+                 min_batch_size: int = 1,
                  opt_batch_size: int = 5,
+                 max_batch_size: int = 5,
                  input_image_size: tuple[int, int] | None = None,
                  target_long_side: int = 640,
                  execution_provider: tuple[str, ...] = ("trt", "cuda", "CoreML", "cpu")):
@@ -33,9 +35,12 @@ class YoloObjInference:
                 如果为 True，将根据 batch size 和尺寸参数预热 TensorRT 引擎缓存。
                 当此参数为 True 时，无论是否提供 `input_image_size`，`fix_image` 都将被设置为 True。
                 默认为 False。
-            max_batch_size (int, optional): 预期的最大 Batch Size。
-                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。默认为 5。
+            stride (int, optional): 模型步长，用于计算对齐后的输入尺寸。默认为 32。
+            min_batch_size (int, optional): 预期的最小 Batch Size。
+                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。默认为 1。
             opt_batch_size (int, optional): 预期的最优 Batch Size。
+                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。默认为 5。
+            max_batch_size (int, optional): 预期的最大 Batch Size。
                 仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。默认为 5。
             input_image_size (tuple[int, int] | None, optional): 原始输入图像的分辨率 (Width, Height)。
                 如果提供，将基于 `target_long_side` 计算最佳矩形推理尺寸 (Rectangular Inference)，此时 fix_image 为 True。
@@ -50,10 +55,11 @@ class YoloObjInference:
             FileNotFoundError: 如果 `model_path` 指定的文件不存在。
         """
         self.model = ONNXInference(model_path=model_path,
-                                   stride=32,
+                                   stride=stride,
                                    enable_trt_profile=enable_trt_profile,
-                                   max_batch_size=max_batch_size,
+                                   min_batch_size=min_batch_size,
                                    opt_batch_size=opt_batch_size,
+                                   max_batch_size=max_batch_size,
                                    input_image_size=input_image_size,
                                    target_long_side=target_long_side,
                                    execution_provider=execution_provider
@@ -95,11 +101,14 @@ class AreaAvgInference(YoloObjInference):
     def __init__(self,
                  model_path: str,
                  areas: list[Area],
+                 area_class: list[int] = None,
                  confidence: float = 0.5,
                  class_num: int = 3,
                  enable_trt_profile: bool = True,
-                 max_batch_size: int = 5,
+                 stride: int = 32,
+                 min_batch_size: int = 1,
                  opt_batch_size: int = 5,
+                 max_batch_size: int = 5,
                  input_image_size: tuple[int, int] | None = None,
                  target_long_side: int = 640):
         """初始化区域平均推理会话。
@@ -107,14 +116,20 @@ class AreaAvgInference(YoloObjInference):
         Args:
             model_path (str): ONNX 模型文件的路径。
             areas (list[Area]): 预定义区域的列表。每个 Area 对象应包含 start_x, start_y, end_x, end_y 属性。
+            area_class (list[int,...], optional) :在区域中只搜索指定的类别，长度为len(areas)，数据为class_id。传入 -1 时，在对应区域内通过加权投票确定主导类别。
             confidence (float, optional): 置信度阈值。低于此值的检测结果将被忽略。默认为 0.5。
             class_num (int, optional): 模型输出的类别总数。用于类别投票时的 `minlength` 参数。默认为 3。
             enable_trt_profile (bool, optional): 是否启用 TensorRT 动态形状配置文件生成。
                 如果为 True，将根据 batch size 和尺寸参数预热 TensorRT 引擎缓存。
                 当此参数为 True 时，无论是否提供 `input_image_size`，`fix_image` 都将被设置为 True。
                 默认为 True。
-            max_batch_size (int, optional): 预期的最大 Batch Size。默认为 5。
-            opt_batch_size (int, optional): 预期的最优 Batch Size。默认为 5。
+            stride (int, optional): 模型步长，用于计算对齐后的输入尺寸。默认为 32。
+            min_batch_size (int, optional): 预期的最小 Batch Size。
+                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。默认为 1。
+            opt_batch_size (int, optional): 预期的最优 Batch Size。
+                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。默认为 5。
+            max_batch_size (int, optional): 预期的最大 Batch Size。
+                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。默认为 5。
             input_image_size (tuple[int, int] | None, optional): 原始输入图像的分辨率 (Width, Height)。
                 如果提供，将基于 `target_long_side` 计算最佳矩形推理尺寸 (Rectangular Inference)，此时 fix_image 为 True。
                 如果不提供，默认使用 `target_long_side` 作为边长的正方形尺寸，此时 fix_image 为 False。
@@ -126,9 +141,11 @@ class AreaAvgInference(YoloObjInference):
             FileNotFoundError: 如果 `model_path` 指定的文件不存在。
         """
         super().__init__(model_path=model_path,
+                         stride=stride,
                          enable_trt_profile=enable_trt_profile,
-                         max_batch_size=max_batch_size,
+                         min_batch_size=min_batch_size,
                          opt_batch_size=opt_batch_size,
+                         max_batch_size=max_batch_size,
                          input_image_size=input_image_size,
                          target_long_side=target_long_side
                          )
@@ -136,6 +153,24 @@ class AreaAvgInference(YoloObjInference):
         self.class_num = class_num
         self.areas = np.array([[area.start_x, area.start_y, area.end_x, area.end_y] for area in areas],
                               dtype=np.float32)
+        if area_class is not None:
+            # 确保每个区域都有一个对应的类别要求
+            if len(area_class) != len(areas):
+                raise ValueError(f"area_class 的长度 ({len(area_class)}) 必须与 areas 的长度 ({len(areas)}) 一致。")
+
+            # 类型与数值边界校验
+            for i, class_id in enumerate(area_class):
+                if not isinstance(class_id, int):
+                    raise TypeError(
+                        f"search_list 第 {i} 个元素 '{class_id}' 类型错误。每个区域仅需一个类别，必须为整数 (int)。")
+
+                if not (-1 <= class_id < class_num):
+                    raise ValueError(
+                        f"search_list 第 {i} 个元素的 class_id ({class_id}) 越界。合法范围是 -1 到 {class_num - 1} (-1 表示类别投票)。")
+
+            self.area_class = tuple(area_class)
+        else:
+            self.area_class = None
 
     def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw: bool = False) -> np.ndarray:
         """对输入图片进行推理，然后根据预定义区域进行结果合并。
@@ -164,13 +199,14 @@ class AreaAvgInference(YoloObjInference):
         """
         raw_output = super().__call__(input_data, raw=raw)  # [batch, 300, 6]
 
-        result = process_detections(raw_output, self.areas, self.confidence, len(self.areas), self.class_num)
+        result = process_detections(raw_output, self.areas, self.confidence, len(self.areas), self.class_num,
+                                    self.area_class)
 
         return result
 
 
 def process_detections(raw_output: np.ndarray, area_bounds: np.ndarray, confidence: float,
-                       num_areas: int, class_num: int) -> np.ndarray:
+                       num_areas: int, class_num: int, area_class: tuple[int, ...]) -> np.ndarray:
     """处理经过NMS的检测输出，并根据预定义区域进行加权平均和类别投票。
 
     该函数将所有批次中置信度高于阈值的检测结果合并，然后根据每个检测框的中心点，
@@ -185,6 +221,7 @@ def process_detections(raw_output: np.ndarray, area_bounds: np.ndarray, confiden
         confidence (float): 检测结果的置信度阈值。低于此阈值的检测将被忽略。
         num_areas (int): 预定义区域的数量。
         class_num (int): 模型输出的类别总数。用于类别投票时的 `minlength` 参数。
+        area_class(tuple[int,...]):在区域中只搜索指定的类别，长度为len(areas)，数据为class_id。传入 -1 时代表对该区域进行类别投票。
 
     Returns:
         np.ndarray: 经过处理后的检测结果，形状为 `(num_areas, 5)`。
@@ -242,13 +279,19 @@ def process_detections(raw_output: np.ndarray, area_bounds: np.ndarray, confiden
         current_scores = all_scores[area_mask]
         current_classes = all_classes[area_mask]
 
-        # 类别投票 (确定主导类别)
-        # 使用分数加权投票
-        class_votes = np.bincount(current_classes, weights=current_scores, minlength=class_num)
-        final_class = np.argmax(class_votes)
+        if area_class is not None and area_class[area_idx] != -1:
+            # 如果指定了 search_list，且该区域要求不为 -1，当前区域只搜索对应的唯一类别
+            final_class = area_class[area_idx]
+        else:
+            # 类别投票 (确定主导类别) 使用分数加权投票
+            class_votes = np.bincount(current_classes, weights=current_scores, minlength=class_num)
+            final_class = np.argmax(class_votes)
 
         # 只保留属于主导类别的框
         target_mask = (current_classes == final_class)
+
+        if not np.any(target_mask):
+            continue
 
         target_boxes = current_boxes[target_mask]
         target_scores = current_scores[target_mask]
@@ -267,10 +310,13 @@ def process_detections(raw_output: np.ndarray, area_bounds: np.ndarray, confiden
 class NumCountInference(YoloObjInference):
     def __init__(self,
                  model_path: str,
+                 target_classes: list[int] | int | None = None,
                  confidence: float = 0.5,
                  enable_trt_profile: bool = True,
-                 max_batch_size: int = 5,
+                 stride: int = 32,
+                 min_batch_size: int = 1,
                  opt_batch_size: int = 5,
+                 max_batch_size: int = 5,
                  input_image_size: tuple[int, int] | None = None,
                  target_long_side: int = 640
                  ):
@@ -278,13 +324,20 @@ class NumCountInference(YoloObjInference):
 
         Args:
             model_path (str): ONNX 模型文件的路径。
+            target_classes (list[int] | int | None, optional): 目标类别过滤。如果提供，仅统计这些类别的目标。
+                默认为 None，表示统计所有类别。当模型输出只有一类时，不建议提供该参数。
             confidence (float, optional): 置信度阈值。默认为 0.5。
             enable_trt_profile (bool, optional): 是否启用 TensorRT 动态形状配置文件生成。
                 如果为 True，将根据 batch size 和尺寸参数预热 TensorRT 引擎缓存。
                 当此参数为 True 时，无论是否提供 `input_image_size`，`fix_image` 都将被设置为 True。
                 默认为 True。
-            max_batch_size (int, optional): 预期的最大 Batch Size。默认为 5。
-            opt_batch_size (int, optional): 预期的最优 Batch Size。默认为 5。
+            stride (int, optional): 模型步长，用于计算对齐后的输入尺寸。默认为 32。
+            min_batch_size (int, optional): 预期的最小 Batch Size。
+                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。默认为 1。
+            opt_batch_size (int, optional): 预期的最优 Batch Size。
+                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。默认为 5。
+            max_batch_size (int, optional): 预期的最大 Batch Size。
+                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。默认为 5。
             input_image_size (tuple[int, int] | None, optional): 原始输入图像的分辨率 (Width, Height)。
                 如果提供，将基于 `target_long_side` 计算最佳矩形推理尺寸 (Rectangular Inference)，此时 fix_image 为 True。
                 如果不提供，默认使用 `target_long_side` 作为边长的正方形尺寸，此时 fix_image 为 False。
@@ -297,55 +350,85 @@ class NumCountInference(YoloObjInference):
         """
 
         super().__init__(model_path=model_path,
+                         stride=stride,
                          enable_trt_profile=enable_trt_profile,
-                         max_batch_size=max_batch_size,
+                         min_batch_size=min_batch_size,
                          opt_batch_size=opt_batch_size,
+                         max_batch_size=max_batch_size,
                          input_image_size=input_image_size,
                          target_long_side=target_long_side
                          )
         self.confidence = confidence
+        
+        if isinstance(target_classes, int):
+            self.target_classes = [target_classes]
+        elif target_classes is not None:
+            self.target_classes = list(target_classes)
+        else:
+            self.target_classes = None
 
-    def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw: bool = True) -> int:
-        """对输入图片进行推理，并进行NMS和置信度过滤，然后计算目标数量。
+    def __call__(self, input_data: list[np.ndarray] | np.ndarray) -> int | list[int]:
+        """对输入图片进行推理，并进行NMS和过滤（置信度和类别），然后计算目标数量。
 
         该方法首先对输入数据进行预处理，然后执行模型推理。
         推理结果经过置信度过滤后，统计每个批次中检测到的目标数量。
+        如果指定了 target_classes，则返回与 target_classes 对应的一组数量的列表。
         如果批次大小为1，则直接返回该批次的目标数量。
-        如果批次大小大于1，则计算所有批次目标数量的众数作为最终结果。
+        如果批次大小大于1，则分别计算每个类别在所有批次目标数量的众数作为最终结果。
 
         Args:
             input_data (list[np.ndarray] | np.ndarray): 输入图像数据。
                 可以是单个 NumPy 数组 `(H, W)` 或 `(H, W, C)`，
                 也可以是包含多个 NumPy 数组的列表。
-            raw (bool, optional): 是否返回原始模型输出。默认为 True。
 
         Returns:
-            int: 检测到的目标数量的众数。
+            int | list[int]: 如果指定了 target_classes，返回每个类别目标数量的列表，列表中的元素对应target_classes中的类别；
+                否则返回总体目标数量。
         """
 
         # Get raw inference output: [batch, 300, 6] where 6 = (x1,y1,x2,y2,score,class)
-        raw_output = super().__call__(input_data, raw=raw)
+        raw_output = super().__call__(input_data, raw=True)
 
         # 所有batch的数量计数
-        confidence_mask = raw_output[:, :, 4] >= self.confidence  # [batch, 300]
-        batch_counts = np.sum(confidence_mask, axis=1)  # [batch]
+        valid_mask = raw_output[:, :, 4] >= self.confidence  # [batch, 300]
+        
+        # 类别过滤与计数
+        if self.target_classes is not None:
+            result = []
+            for class_id in self.target_classes:
+                class_mask = raw_output[:, :, 5] == class_id
+                target_valid_mask = valid_mask & class_mask
+                batch_counts = np.sum(target_valid_mask, axis=1)  # [batch]
+                
+                if len(batch_counts) == 1:
+                    result.append(int(batch_counts[0]))
+                else:
+                    unique_counts, frequencies = np.unique(batch_counts, return_counts=True)
+                    mode_index = np.argmax(frequencies)
+                    result.append(int(unique_counts[mode_index]))
+            return result
+        
+        else:
+            batch_counts = np.sum(valid_mask, axis=1)  # [batch]
 
-        if len(batch_counts) == 1:
-            return int(batch_counts[0])
+            if len(batch_counts) == 1:
+                return int(batch_counts[0])
 
-        # 计算众数
-        unique_counts, frequencies = np.unique(batch_counts, return_counts=True)
-        mode_index = np.argmax(frequencies)
+            # 计算众数
+            unique_counts, frequencies = np.unique(batch_counts, return_counts=True)
+            mode_index = np.argmax(frequencies)
 
-        return int(unique_counts[mode_index])
+            return int(unique_counts[mode_index])
 
 
 class YoloSegInference:
     def __init__(self,
                  model_path: str,
                  enable_trt_profile: bool = False,
-                 max_batch_size: int = 5,
+                 stride: int = 32,
+                 min_batch_size: int = 1,
                  opt_batch_size: int = 5,
+                 max_batch_size: int = 5,
                  input_image_size: tuple[int, int] | None = None,
                  target_long_side: int = 640,
                  execution_provider: tuple[str, ...] = ("trt", "cuda", "CoreML", "cpu"),
@@ -362,8 +445,13 @@ class YoloSegInference:
                 如果为 True，将根据 batch size 和尺寸参数预热 TensorRT 引擎缓存。
                 当此参数为 True 时，无论是否提供 `input_image_size`，`fix_image` 都将被设置为 True。
                 默认为 False。
-            max_batch_size (int, optional): 预期的最大 Batch Size。默认为 5。
-            opt_batch_size (int, optional): 预期的最优 Batch Size。默认为 5。
+            stride (int, optional): 模型步长，用于计算对齐后的输入尺寸。默认为 32。
+            min_batch_size (int, optional): 预期的最小 Batch Size。
+                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。默认为 1。
+            opt_batch_size (int, optional): 预期的最优 Batch Size。
+                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。默认为 5。
+            max_batch_size (int, optional): 预期的最大 Batch Size。
+                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。默认为 5。
             input_image_size (tuple[int, int] | None, optional): 原始输入图像的分辨率 (Width, Height)。
                 如果提供，将基于 `target_long_side` 计算最佳矩形推理尺寸 (Rectangular Inference)，此时 fix_image 为 True。
                 如果不提供，默认使用 `target_long_side` 作为边长的正方形尺寸，此时 fix_image 为 False。
@@ -378,10 +466,11 @@ class YoloSegInference:
             FileNotFoundError: 如果 `model_path` 指定的文件不存在。
         """
         self.model = ONNXInference(model_path=model_path,
-                                   stride=32,
+                                   stride=stride,
                                    enable_trt_profile=enable_trt_profile,
-                                   max_batch_size=max_batch_size,
+                                   min_batch_size=min_batch_size,
                                    opt_batch_size=opt_batch_size,
+                                   max_batch_size=max_batch_size,
                                    input_image_size=input_image_size,
                                    target_long_side=target_long_side,
                                    execution_provider=execution_provider

@@ -366,15 +366,15 @@ class ImageProcessor:
 
         return res
 
-    @staticmethod
     @overload
+    @staticmethod
     def restore_boxes(detections: np.ndarray,
                       transform_params: list[dict],
                       box_format: str = 'xyxy') -> np.ndarray:
         ...
 
-    @staticmethod
     @overload
+    @staticmethod
     def restore_boxes(detections: list[np.ndarray],
                       transform_params: list[dict],
                       box_format: str = 'xyxy') -> list[np.ndarray]:

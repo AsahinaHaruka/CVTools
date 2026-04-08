@@ -3,7 +3,7 @@ Author: Haruka
 Date: 2026-01-09 08:53:47
 LastEditors: Haruka
 LastEditTime: 2026-01-09 10:58:10
-FilePath: /road/inference/sam3_inference.py
+FilePath: sam3_inference.py
 """
 
 import numpy as np
@@ -19,8 +19,10 @@ class SAM3Inference:
                  vocab_file: str,
                  merges_file: str,
                  enable_trt_profile: bool = False,
-                 max_batch_size: int = 1,
+                 stride: int = 14,
+                 min_batch_size: int = 1,
                  opt_batch_size: int = 1,
+                 max_batch_size: int = 1,
                  input_image_size: tuple[int, int] = None,
                  target_long_side: int = 640,
                  other_size=(32, 32, 32),
@@ -39,12 +41,13 @@ class SAM3Inference:
                 如果为 True，将根据 batch size 和尺寸参数预热 TensorRT 引擎缓存，
                 当此参数为 True 时，无论是否提供 `input_image_size`，`fix_image` 都将被设置为 False。
                 默认为 True。
-            max_batch_size (int, optional): 预期的最大 Batch Size。
-                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。
-                默认为 1。
+            stride (int, optional): 模型步长，用于计算对齐后的输入尺寸。默认为 14。
+            min_batch_size (int, optional): 预期的最小 Batch Size。
+                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。默认为 1。
             opt_batch_size (int, optional): 预期的最优 Batch Size。
-                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。
-                默认为 1。
+                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。默认为 1。
+            max_batch_size (int, optional): 预期的最大 Batch Size。
+                仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。默认为 1。
             input_image_size (tuple[int, int] | None, optional): 原始输入图像的分辨率 (Width, Height)。
                 如果提供，将基于 `target_long_side` 计算最佳矩形推理尺寸 (Rectangular Inference)，
                 此时 `fix_image` 将被设置为 True。
@@ -62,10 +65,11 @@ class SAM3Inference:
             FileNotFoundError: 如果 `model_path` 指定的文件不存在。
         """
         self.model=ONNXInference(model_path=model_path,
-                         stride=14,
-                         enable_trt_profile=enable_trt_profile,  # 这里的 enable_trt_profile 应该直接传递
-                         max_batch_size=max_batch_size,
+                         stride=stride,
+                         enable_trt_profile=enable_trt_profile,
+                         min_batch_size=min_batch_size,
                          opt_batch_size=opt_batch_size,
+                         max_batch_size=max_batch_size,
                          input_image_size=input_image_size,
                          target_long_side=target_long_side,
                          other_size=other_size,
