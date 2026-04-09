@@ -177,15 +177,11 @@ class AreaAvgInference(YoloObjInference):
             self.area_class = None
 
     @overload
-    def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw: Literal[False] = False) -> np.ndarray:
+    def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw: Literal[False] = ...) -> np.ndarray:
         ...
 
     @overload
-    def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw: Literal[True]) -> dict[str, np.ndarray]:
-        ...
-
-    @overload
-    def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw: bool) -> np.ndarray | dict[str, np.ndarray]:
+    def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw: Literal[True] = ...) -> dict[str, np.ndarray]:
         ...
 
     def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw: bool = False) -> np.ndarray | dict[
@@ -386,15 +382,11 @@ class NumCountInference(YoloObjInference):
             self.target_classes = None
 
     @overload
-    def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw: Literal[False] = False) -> int | list[int]:
+    def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw: Literal[False] = ...) -> int | list[int]:
         ...
 
     @overload
-    def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw: Literal[True]) -> dict[str, int | list[int]]:
-        ...
-
-    @overload
-    def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw: bool) -> int | list[int] | dict[
+    def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw: Literal[True] = ...) -> dict[
         str, int | list[int]]:
         ...
 
@@ -417,7 +409,7 @@ class NumCountInference(YoloObjInference):
         Returns:
             int | list[int] | dict[str, Any]:
                 - 当 `raw=False` 时:
-                  返回统计数量，如果指定了 target_classes，返回每个类别目标数量的列表 `list[int]`；
+                  只返回统计数量，如果指定了 target_classes，返回每个类别目标数量的列表 `list[int]`；
                   否则返回总体目标数量 `int`。
                 - 当 `raw=True` 时:
                   返回字典 `{'detections': 原始检测结果, 'num_count': 统计数量}`。
