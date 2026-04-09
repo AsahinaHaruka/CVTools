@@ -27,7 +27,7 @@
 * [data_split.py](data_split.py): 随机拆分训练集和测试集。
 * [show_yolo_obj_image.py](show_yolo_obj_image.py): 可视化YOLO目标检测的标注。
 * [show_yolo_seg_image.py](show_yolo_seg_image.py): 可视化YOLO实例分割的标注。
-* [rtsp_video.py](rtsp_video.py): RTSP拉流（**修改后待测试**）。
+* [rtsp_video.py](rtsp_video.py): RTSP拉流。
 
 ## 安装与使用
 
@@ -98,7 +98,7 @@ installation of hardware acceleration backends.
 * [data_split.py](data_split.py): Randomly splits a dataset into training and testing sets.
 * [show_yolo_obj_image.py](show_yolo_obj_image.py): Visualizes YOLO object detection labels.
 * [show_yolo_seg_image.py](show_yolo_seg_image.py): Visualizes YOLO instance segmentation labels.
-* [rtsp_video.py](rtsp_video.py): RTSP video streaming (**Modified, pending test**).
+* [rtsp_video.py](rtsp_video.py): RTSP video streaming.
 
 ## Installation and Usage
 

@@ -44,7 +44,9 @@ class YoloObjInference:
                 仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。默认为 5。
             input_image_size (tuple[int, int] | None, optional): 原始输入图像的分辨率 (Width, Height)。
                 如果提供，将基于 `target_long_side` 计算最佳矩形推理尺寸 (Rectangular Inference)，此时 fix_image 为 True。
-                如果不提供，默认使用 `target_long_side` 作为边长的正方形尺寸，此时 fix_image 为 False。
+                如果不提供，默认使用 `target_long_side` 作为最长边进行动态缩放。
+                在`enable_trt_profile=False`时二者行为一致，
+                在`enable_trt_profile=True`时后者将会使用`target_long_side`的正方形进行形状固定
                 默认为 None。
             target_long_side (int, optional): 预期的输入图像长边尺寸。
                 用于计算实际推理时的输入分辨率。默认为 640。
@@ -132,7 +134,9 @@ class AreaAvgInference(YoloObjInference):
                 仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。默认为 5。
             input_image_size (tuple[int, int] | None, optional): 原始输入图像的分辨率 (Width, Height)。
                 如果提供，将基于 `target_long_side` 计算最佳矩形推理尺寸 (Rectangular Inference)，此时 fix_image 为 True。
-                如果不提供，默认使用 `target_long_side` 作为边长的正方形尺寸，此时 fix_image 为 False。
+                如果不提供，默认使用 `target_long_side` 作为最长边进行动态缩放。
+                在`enable_trt_profile=False`时二者行为一致，
+                在`enable_trt_profile=True`时后者将会使用`target_long_side`的正方形进行形状固定
                 默认为 None。
             target_long_side (int, optional): 预期的输入图像长边尺寸。
                 用于计算实际推理时的输入分辨率。默认为 640。
@@ -172,10 +176,23 @@ class AreaAvgInference(YoloObjInference):
         else:
             self.area_class = None
 
-    def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw: bool = False) -> np.ndarray:
+    @overload
+    def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw: Literal[False] = False) -> np.ndarray:
+        ...
+
+    @overload
+    def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw: Literal[True]) -> dict[str, np.ndarray]:
+        ...
+
+    @overload
+    def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw: bool) -> np.ndarray | dict[str, np.ndarray]:
+        ...
+
+    def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw: bool = False) -> np.ndarray | dict[
+        str, np.ndarray]:
         """对输入图片进行推理，然后根据预定义区域进行结果合并。
 
-        该方法首先调用父类的 `__call__` 方法获取原始的检测结果。
+        该方法首先调用YOLO目标检测方法获取原始的检测结果。
         接着，它会筛选出置信度高于阈值的检测框，并根据这些检测框的中心点判断它们属于哪个预定义区域。
         对于每个区域，它会合并所有批次中落入该区域的检测结果，通过加权平均确定最终的边界框，
         并通过加权投票确定主导类别。
@@ -184,25 +201,24 @@ class AreaAvgInference(YoloObjInference):
             input_data (list[np.ndarray] | np.ndarray): 输入图像数据。
                 可以是单个 NumPy 数组 `(H, W)` 或 `(H, W, C)`，
                 也可以是包含多个 NumPy 数组的列表。
-            raw (bool, optional): 是否返回原始模型输出。
-                如果为 True，则返回模型原始输出的边界框（未经过后处理）；
-                否则，边界框将被还原到原始图像坐标系。默认为 False。
-                                  注意：此处的 `raw` 参数传递给 `super().__call__`，
-                                  但 `process_detections` 始终处理还原后的坐标。
+            raw (bool, optional): 是否返回目标检测结果（还原到原图）。默认为 False。
 
         Returns:
-            np.ndarray: 经过区域合并和处理后的检测结果，形状为 `(len(self.areas), 5)`。
-                        其中 5 代表 `(x1, y1, x2, y2, class_id)`。
-                        如果某个区域没有检测到目标，其类别将为 -1。
+            np.ndarray | dict[str, np.ndarray]:
+                - 当 `raw=False` 时返回 `np.ndarray`:
+                  经过区域合并和处理后的检测结果，形状为 `(len(self.areas), 5)`。
+                  其中 5 代表 `(x1, y1, x2, y2, class_id)`。如果某个区域没有检测到目标，其类别将为 -1。
+                - 当 `raw=True` 时返回 `dict`:
+                  包含 `{'detections': 原始检测结果, 'area_avg': 区域平均结果}` 的字典。
         Note:
             此函数假设 NMS 内置于模型之中。
         """
-        raw_output = super().__call__(input_data, raw=raw)  # [batch, 300, 6]
+        raw_output = super().__call__(input_data, raw=False)  # [batch, 300, 6]
 
         result = process_detections(raw_output, self.areas, self.confidence, len(self.areas), self.class_num,
                                     self.area_class)
 
-        return result
+        return {'detections': raw_output, 'area_avg': result, } if raw else result
 
 
 def process_detections(raw_output: np.ndarray, area_bounds: np.ndarray, confidence: float,
@@ -340,7 +356,9 @@ class NumCountInference(YoloObjInference):
                 仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。默认为 5。
             input_image_size (tuple[int, int] | None, optional): 原始输入图像的分辨率 (Width, Height)。
                 如果提供，将基于 `target_long_side` 计算最佳矩形推理尺寸 (Rectangular Inference)，此时 fix_image 为 True。
-                如果不提供，默认使用 `target_long_side` 作为边长的正方形尺寸，此时 fix_image 为 False。
+                如果不提供，默认使用 `target_long_side` 作为最长边进行动态缩放。
+                在`enable_trt_profile=False`时二者行为一致，
+                在`enable_trt_profile=True`时后者将会使用`target_long_side`的正方形进行形状固定
                 默认为 None。
             target_long_side (int, optional): 预期的输入图像长边尺寸。
                 用于计算实际推理时的输入分辨率。默认为 640。
@@ -359,7 +377,7 @@ class NumCountInference(YoloObjInference):
                          target_long_side=target_long_side
                          )
         self.confidence = confidence
-        
+
         if isinstance(target_classes, int):
             self.target_classes = [target_classes]
         elif target_classes is not None:
@@ -367,10 +385,24 @@ class NumCountInference(YoloObjInference):
         else:
             self.target_classes = None
 
-    def __call__(self, input_data: list[np.ndarray] | np.ndarray) -> int | list[int]:
+    @overload
+    def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw: Literal[False] = False) -> int | list[int]:
+        ...
+
+    @overload
+    def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw: Literal[True]) -> dict[str, int | list[int]]:
+        ...
+
+    @overload
+    def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw: bool) -> int | list[int] | dict[
+        str, int | list[int]]:
+        ...
+
+    def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw: bool = False) -> int | list[int] | dict[
+        str, int | list[int]]:
         """对输入图片进行推理，并进行NMS和过滤（置信度和类别），然后计算目标数量。
 
-        该方法首先对输入数据进行预处理，然后执行模型推理。
+        该方法首先调用YOLO目标检测方法获取原始的检测结果。
         推理结果经过置信度过滤后，统计每个批次中检测到的目标数量。
         如果指定了 target_classes，则返回与 target_classes 对应的一组数量的列表。
         如果批次大小为1，则直接返回该批次的目标数量。
@@ -380,34 +412,39 @@ class NumCountInference(YoloObjInference):
             input_data (list[np.ndarray] | np.ndarray): 输入图像数据。
                 可以是单个 NumPy 数组 `(H, W)` 或 `(H, W, C)`，
                 也可以是包含多个 NumPy 数组的列表。
+            raw (bool, optional): 是否返回目标检测结果（还原到原图）。默认为 False。
 
         Returns:
-            int | list[int]: 如果指定了 target_classes，返回每个类别目标数量的列表，列表中的元素对应target_classes中的类别；
-                否则返回总体目标数量。
+            int | list[int] | dict[str, Any]:
+                - 当 `raw=False` 时:
+                  返回统计数量，如果指定了 target_classes，返回每个类别目标数量的列表 `list[int]`；
+                  否则返回总体目标数量 `int`。
+                - 当 `raw=True` 时:
+                  返回字典 `{'detections': 原始检测结果, 'num_count': 统计数量}`。
         """
 
         # Get raw inference output: [batch, 300, 6] where 6 = (x1,y1,x2,y2,score,class)
-        raw_output = super().__call__(input_data, raw=True)
+        # 在不需要推理结果时使用原始数据进行处理，否则使用还原后的数据进行处理
+        raw_output = super().__call__(input_data, raw=not raw)
 
         # 所有batch的数量计数
         valid_mask = raw_output[:, :, 4] >= self.confidence  # [batch, 300]
-        
+
         # 类别过滤与计数
         if self.target_classes is not None:
-            result = []
+            num_count = []
             for class_id in self.target_classes:
                 class_mask = raw_output[:, :, 5] == class_id
                 target_valid_mask = valid_mask & class_mask
                 batch_counts = np.sum(target_valid_mask, axis=1)  # [batch]
-                
+
                 if len(batch_counts) == 1:
-                    result.append(int(batch_counts[0]))
+                    num_count.append(int(batch_counts[0]))
                 else:
                     unique_counts, frequencies = np.unique(batch_counts, return_counts=True)
                     mode_index = np.argmax(frequencies)
-                    result.append(int(unique_counts[mode_index]))
-            return result
-        
+                    num_count.append(int(unique_counts[mode_index]))
+
         else:
             batch_counts = np.sum(valid_mask, axis=1)  # [batch]
 
@@ -418,7 +455,9 @@ class NumCountInference(YoloObjInference):
             unique_counts, frequencies = np.unique(batch_counts, return_counts=True)
             mode_index = np.argmax(frequencies)
 
-            return int(unique_counts[mode_index])
+            num_count = int(unique_counts[mode_index])
+
+        return {'detections': raw_output, 'num_count': num_count} if raw else num_count
 
 
 class YoloSegInference:
@@ -454,7 +493,9 @@ class YoloSegInference:
                 仅在 `enable_trt_profile=True` 且模型输入包含动态 Batch 维度时生效。默认为 5。
             input_image_size (tuple[int, int] | None, optional): 原始输入图像的分辨率 (Width, Height)。
                 如果提供，将基于 `target_long_side` 计算最佳矩形推理尺寸 (Rectangular Inference)，此时 fix_image 为 True。
-                如果不提供，默认使用 `target_long_side` 作为边长的正方形尺寸，此时 fix_image 为 False。
+                如果不提供，默认使用 `target_long_side` 作为最长边进行动态缩放。
+                在`enable_trt_profile=False`时二者行为一致，
+                在`enable_trt_profile=True`时后者将会使用`target_long_side`的正方形进行形状固定
                 默认为 None。
             target_long_side (int, optional): 预期的输入图像长边尺寸。
                 用于计算实际推理时的输入分辨率。默认为 640。
