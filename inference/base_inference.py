@@ -231,7 +231,8 @@ class ONNXInference:
                 如果提供，将根据原始图像比例和 target_long 计算推理尺寸。
                 如果为 None，则默认使用 target_long 作为正方形的边长。
 
-        Return: [Height, Width]
+        Returns:
+            [Height, Width]
         """
         if input_wh is not None:
             # 矩形推理 (根据原图比例计算)

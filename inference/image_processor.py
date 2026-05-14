@@ -131,6 +131,7 @@ class ImageProcessor:
             tuple[np.ndarray, dict]: 包含两个元素的元组。
                 - np.ndarray: 经过 Letterbox 处理后的图像，形状为 (H', W', C')。
                 - dict: 包含变换参数的字典，键包括 'orig_shape' (原始图像形状), 'scale' (缩放比例), 'padding' (左上角填充量)。
+                'transformed_shape' (转换后的大小)
         """
 
         shape = img.shape[:2]
@@ -185,7 +186,7 @@ class ImageProcessor:
             'orig_shape': shape,
             'scale': r,
             'padding': (left, top),
-            'input_shape': transformed_img.shape[:2]
+            'transformed_shape': transformed_img.shape[:2]
         }
         return transformed_img, transform_params
 
@@ -249,7 +250,7 @@ class ImageProcessor:
             'orig_shape': (h_orig, w_orig),
             'scale': r,
             'padding': (left, top),
-            'input_shape': (final_h, final_w)
+            'transformed_shape': (final_h, final_w)
         }
         transform_params = [common_params] * batch_size
 
@@ -430,7 +431,7 @@ class ImageProcessor:
             params = transform_params[i]
 
             # 反归一化
-            input_shape = params.get('input_shape')
+            input_shape = params.get('transformed_shape')
             if input_shape:
                 res = ImageProcessor.process_box_coordinates(det, input_shape, box_format)
             else:
@@ -468,7 +469,7 @@ class ImageProcessor:
             np.ndarray: 还原后的检测结果数组。
         """
         # 反归一化
-        input_shape = transform_params[0].get('input_shape')
+        input_shape = transform_params[0].get('transformed_shape')
         if input_shape:
             result = ImageProcessor.process_box_coordinates(detections, input_shape, box_format)
         else:
@@ -512,7 +513,7 @@ class ImageProcessor:
                 期望形状为 `(Batch, Num_Queries, Mask_H, Mask_W)` 或 `(Num_Queries, Mask_H, Mask_W)`。
                 也可以是 `list[np.ndarray]`。Mask 值通常是 logits。
             transform_params (list[dict]): 包含每个图像预处理时使用的变换参数的字典列表。
-                每个字典应包含 'orig_shape', 'padding', 'input_shape'。
+                每个字典应包含 'orig_shape', 'padding', 'transformed_shape'。
             boxes (np.ndarray | list[np.ndarray] | None, optional): 对应的检测框。
                 可以是 `(B, N, 4)` 的数组或列表。
                 坐标必须是模型输出坐标系(即未还原的坐标)。
@@ -588,7 +589,7 @@ class ImageProcessor:
         """
 
         orig_h, orig_w = params['orig_shape']
-        input_h, input_w = params['input_shape']
+        input_h, input_w = params['transformed_shape']
         pad_w, pad_h = params['padding']
 
         batch_size, num_queries, mask_h, mask_w = masks.shape
@@ -694,7 +695,7 @@ class ImageProcessor:
         # 遍历 Batch
         for i, mask_tensor in enumerate(masks):
             params = transform_params[i]
-            input_h, input_w = params['input_shape']
+            input_h, input_w = params['transformed_shape']
             orig_h, orig_w = params['orig_shape']
             pad_w, pad_h = params['padding']
 

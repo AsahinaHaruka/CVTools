@@ -314,4 +314,3 @@ if __name__ == "__main__":
                    extract_fps=final_fps,
                    force_overwrite=args.force)
 
-    logger.info("Frame extraction completed.")
