@@ -92,7 +92,11 @@ class ONNXInference:
         # 预分析模型结构 有几个输入，哪些是图像，哪些是动态的
         self.input_meta, self.output_names = self._scan_model_io(model_bytes)
 
-        fixed_h, fixed_w = self._check_static_shape()
+        available_providers = ort.get_available_providers()
+        logger.debug(f"ℹ️ [Init] 系统当前可用后端: {available_providers}")
+        is_trt_active = "trt" in execution_provider and "TensorrtExecutionProvider" in available_providers
+
+        fixed_h, fixed_w, has_dynamic = self._check_static_shape()
 
         if fixed_h is not None and fixed_w is not None:
             #  如果模型尺寸固定，强制使用模型尺寸
@@ -102,6 +106,9 @@ class ONNXInference:
             logger.info(f"ℹ️ [Init] 检测到模型图像输入尺寸固定，强制使用固定图像输入: {self.img_size}")
 
         else:
+            if is_trt_active and enable_trt_profile:
+                self.fix_image = True
+
             self.img_size = self._get_inference_size(
                 self.target_long_side,
                 stride,
@@ -119,35 +126,29 @@ class ONNXInference:
             'trt_fp16_enable': True,
         }
 
-        if enable_trt_profile:
-            trt_profile_options = self._build_trt_profile(other_size)
-            self.fix_image = True
+        providers = []
+        # TensorRT
+        if is_trt_active:
+            if enable_trt_profile:
+                trt_profile_options = self._build_trt_profile(other_size)
 
-            if trt_profile_options:
                 if trt_profile_options:
                     logger.info(f"ℹ️ [Init] 设置TensorRT 动态形状优化参数:\n"
-                          f"   Min: {trt_profile_options['trt_profile_min_shapes']}\n"
-                          f"   Opt: {trt_profile_options['trt_profile_opt_shapes']}\n"
-                          f"   Max: {trt_profile_options['trt_profile_max_shapes']}")
+                                f"   Min: {trt_profile_options['trt_profile_min_shapes']}\n"
+                                f"   Opt: {trt_profile_options['trt_profile_opt_shapes']}\n"
+                                f"   Max: {trt_profile_options['trt_profile_max_shapes']}")
 
-                trt_provider_options.update(trt_profile_options)
+                    trt_provider_options.update(trt_profile_options)
 
-            model_name = os.path.splitext(os.path.basename(model_path))[0]
-            shape_tag = f"{opt_batch_size}_{max_batch_size}__{self.img_size[0]}x{self.img_size[1]}__{other_size[0]}_{other_size[1]}_{other_size[2]}"
-            cache_dir = os.path.join("trt_cache", f"{model_name}__{shape_tag}")
-            os.makedirs(cache_dir, exist_ok=True)
+                model_name = os.path.splitext(os.path.basename(model_path))[0]
+                shape_tag = f"{opt_batch_size}_{max_batch_size}__{self.img_size[0]}x{self.img_size[1]}__{other_size[0]}_{other_size[1]}_{other_size[2]}"
+                cache_dir = os.path.join("trt_cache", f"{model_name}__{shape_tag}")
+                os.makedirs(cache_dir, exist_ok=True)
 
-            trt_provider_options.update({
-                "trt_engine_cache_enable": True,
-                "trt_engine_cache_path": cache_dir,
-            })
-
-        available_providers = ort.get_available_providers()
-        logger.debug(f"ℹ️ [Init] 系统当前可用后端: {available_providers}")
-        providers = []
-
-        # TensorRT
-        if "trt" in execution_provider and "TensorrtExecutionProvider" in available_providers:
+                trt_provider_options.update({
+                    "trt_engine_cache_enable": True,
+                    "trt_engine_cache_path": cache_dir,
+                })
             # 只有当环境支持 TRT 时，才传入配置好的 trt_provider_options
             providers.append(("TensorrtExecutionProvider", trt_provider_options))
 
@@ -157,6 +158,9 @@ class ONNXInference:
 
         # CoreML
         if "CoreML" in execution_provider and "CoreMLExecutionProvider" in available_providers:
+            if has_dynamic:
+                logger.warning("⚠️ [WARNING] 检测到模型存在动态维度，使用CoreML速度可能不如CPU")
+
             providers.append((
                 "CoreMLExecutionProvider",
                 {
@@ -165,8 +169,7 @@ class ONNXInference:
                     "RequireStaticInputShapes": "1",
                     "EnableOnSubgraphs": "0",
                 },
-            )
-            )
+            ))
 
         # CPU
         if "cpu" in execution_provider:
@@ -201,21 +204,30 @@ class ONNXInference:
         del temp_sess
         return inputs, output_names
 
-    def _check_static_shape(self) -> tuple[int | None, int | None]:
+    def _check_static_shape(self) -> tuple[int | None, int | None, bool]:
         """
-        检查模型是否具有固定的图像尺寸。
+        检查模型是否具有固定的图像尺寸，以及是否包含动态维度。
         假设：如果是 4D 输入 (N, C, H, W)，则检查 H(2) 和 W(3)。
         """
+        fixed_h, fixed_w = None, None
+        has_dynamic = False
+
         for meta in self.input_meta:
             shape = meta['shape']
+            
+            for dim in shape:
+                if not isinstance(dim, int):
+                    has_dynamic = True
+                    
             # 如果是 4 维张量，通常认为是 NCHW 的图像输入
             if len(shape) == 4:
                 h = shape[2]
                 w = shape[3]
                 # 在 ONNXRuntime 中，固定维度是 int，动态维度是 str 或 None
                 if isinstance(h, int) and isinstance(w, int):
-                    return h, w
-        return None, None
+                    fixed_h, fixed_w = h, w
+
+        return fixed_h, fixed_w, has_dynamic
 
     def _get_inference_size(self, target_long: int, stride: int, input_wh: tuple[int, int] = None) -> tuple[int, int]:
         """
