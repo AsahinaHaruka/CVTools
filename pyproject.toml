@@ -1,13 +1,28 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "cvtools"
 version = "0.1.0"
 description = "A computer vision toolkit."
 readme = "README.md"
 requires-python = ">=3.10"
+authors = [
+    { name = "Haruka" }
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Image Processing",
+]
 dependencies = [
     "tqdm>=4.67.1",
-    "opencv-python>=4.7.0.72"
+    "opencv-python>=4.7.0.72",
+    "numpy>=1.23.0"
 ]
+
 [project.optional-dependencies]
 onnx-core = [
     "onnx>=1.19.1",
@@ -24,3 +39,11 @@ onnx-gpu = [
 sam = [
     "regex"
 ]
+
+[project.scripts]
+cvtools-color-to-gray = "cvtools.color_to_gray:main"
+cvtools-data-split = "cvtools.data_split:main"
+cvtools-random-selection = "cvtools.random_selection:main"
+cvtools-show-yolo-obj = "cvtools.show_yolo_obj_image:main_cli"
+cvtools-show-yolo-seg = "cvtools.show_yolo_seg_image:main_cli"
+cvtools-video2image = "cvtools.video2image:main"

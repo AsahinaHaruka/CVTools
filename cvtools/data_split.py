@@ -11,7 +11,7 @@ from tqdm import tqdm
 import shutil
 import argparse
 
-from utils.logger import LoggerBuilder
+from cvtools.utils.logger import LoggerBuilder
 
 logger = LoggerBuilder().get_logger(name="data_split")
 

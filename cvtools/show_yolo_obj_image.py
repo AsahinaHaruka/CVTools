@@ -9,10 +9,10 @@ import os
 import argparse
 import cv2
 import numpy as np
-from inference.yolo_inference import YoloObjInference
+from cvtools.inference.yolo_inference import YoloObjInference
 from tqdm import tqdm
 
-from utils.logger import LoggerBuilder
+from cvtools.utils.logger import LoggerBuilder
 
 logger = LoggerBuilder().get_logger(name="data_split")
 
@@ -100,7 +100,7 @@ def main(args: argparse.Namespace) -> None:
     logger.info(f"Inference complete. Annotated images are saved in '{args.output}'.")
 
 
-if __name__ == '__main__':
+def main_cli() -> None:
     parser = argparse.ArgumentParser(description="ONNX FP16 Inference Script for a folder of images.")
     parser.add_argument('--model', type=str, required=True, help="Path to the half-precision ONNX model file.")
     parser.add_argument('-i', '--input', type=str, required=True, help="Path to the folder containing input images.")
@@ -109,3 +109,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     main(args)
+
+
+if __name__ == '__main__':
+    main_cli()

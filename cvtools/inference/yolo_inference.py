@@ -9,7 +9,7 @@ import numpy as np
 
 from .base_inference import ONNXInference
 from .image_processor import ImageProcessor
-from utils.data_define import Area
+from cvtools.utils.data_define import Area
 
 
 class YoloObjInference:

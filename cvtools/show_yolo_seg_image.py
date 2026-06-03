@@ -9,10 +9,10 @@ import os
 import cv2
 import numpy as np
 from tqdm import tqdm
-from inference.yolo_inference import YoloSegInference
+from cvtools.inference.yolo_inference import YoloSegInference
 
 
-from utils.logger import LoggerBuilder
+from cvtools.utils.logger import LoggerBuilder
 logger = LoggerBuilder().get_logger(name="yolo_seg")
 
 
@@ -157,7 +157,7 @@ def main(args: argparse.Namespace) -> None:
     logger.info(f"Inference complete. Annotated images are saved in '{args.output}'.")
 
 
-if __name__ == '__main__':
+def main_cli() -> None:
     parser = argparse.ArgumentParser(description="YOLO Segmentation Inference Script.")
     parser.add_argument('--model', type=str, required=True, help="Path to the ONNX segmentation model file.")
     parser.add_argument('-i', '--input', type=str, required=True, help="Path to the image file or folder containing input images.")
@@ -166,3 +166,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     main(args)
+
+
+if __name__ == '__main__':
+    main_cli()
