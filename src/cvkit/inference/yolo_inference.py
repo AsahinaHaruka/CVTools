@@ -1,8 +1,8 @@
 """
-@Project ：CVTools
-@File ：yolo_inference.py
-@Author ：Haruka
-@Date ：2025/8/22 08:58
+@Project:  CVKit
+@File:     yolo_inference.py
+@Author:   Haruka
+@Date:     2025/8/22 08:58
 """
 from typing import overload, Literal
 import numpy as np

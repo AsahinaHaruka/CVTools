@@ -30,10 +30,11 @@ wheels = [
 ]
 
 [[package]]
-name = "cvtools"
+name = "cvkit-python"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
+    { name = "numpy" },
     { name = "opencv-python" },
     { name = "tqdm" },
 ]
@@ -59,8 +60,9 @@ sam = [
 
 [package.metadata]
 requires-dist = [
-    { name = "cvtools", extras = ["onnx-core"], marker = "extra == 'onnx-cpu'" },
-    { name = "cvtools", extras = ["onnx-core"], marker = "extra == 'onnx-gpu'" },
+    { name = "cvkit-python", extras = ["onnx-core"], marker = "extra == 'onnx-cpu'" },
+    { name = "cvkit-python", extras = ["onnx-core"], marker = "extra == 'onnx-gpu'" },
+    { name = "numpy", specifier = ">=1.23.0" },
     { name = "onnx", marker = "extra == 'onnx-core'", specifier = ">=1.19.1" },
     { name = "onnxruntime", marker = "extra == 'onnx-cpu'", specifier = ">=1.23.2" },
     { name = "onnxruntime-gpu", marker = "extra == 'onnx-gpu'", specifier = ">=1.23.2" },

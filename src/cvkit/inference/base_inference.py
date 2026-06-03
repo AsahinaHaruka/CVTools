@@ -1,8 +1,8 @@
 """
-@Project : CVTools 
+@Project : CVKit
 @File : base_inference.py
 @Author : Haruka
-@Date : 2026/1/8 16:36 
+@Date : 2026/1/8 16:36
 """
 import math
 import os

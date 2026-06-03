@@ -1,8 +1,8 @@
 """
-@Project : CVTools 
+@Project : CVKit
 @File : image_processor.py
 @Author : Haruka
-@Date : 2026/1/9 13:41 
+@Date : 2026/1/9 13:41
 """
 import cv2
 import numpy as np

@@ -1,8 +1,8 @@
 """
-@Project ：CVTools
-@File ：video2image.py
-@Author ：Haruka
-@Date ：2025/8/16 16:45
+@Project:  CVKit
+@File:     video2image.py
+@Author:   Haruka
+@Date:     2025/8/16 16:45
 """
 import os
 import time

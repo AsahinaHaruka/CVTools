@@ -1,8 +1,8 @@
 """
-@Project ：CVTools
-@File ：show_yolo_obj_image.py
-@Author ：Haruka
-@Date ：2025/12/10 08:29
+@Project:  CVKit
+@File:     show_yolo_obj_image.py
+@Author:   Haruka
+@Date:     2025/12/10 08:29 
 """
 
 import os

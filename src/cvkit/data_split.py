@@ -1,8 +1,8 @@
 """
-@Project ：CVTools
-@File ：data_split.py
-@Author ：Haruka
-@Date ：2025/12/11 16:43 
+@Project:  CVKit
+@File:     data_split.py
+@Author:   Haruka
+@Date:     2025/12/11 16:43
 """
 
 import os

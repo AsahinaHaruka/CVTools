@@ -1,8 +1,8 @@
 """
-@Project ：CVTools
-@File ：color_to_gray.py
-@Author ：Haruka
-@Date ：2025/9/26 11:38 
+@Project:  CVKit
+@File:     color_to_gray.py
+@Author:   Haruka
+@Date:     2025/9/26 11:38
 """
 import argparse
 import sys

@@ -1,9 +1,8 @@
 """
-Author: Haruka
-Date: 2026-01-09 08:53:47
-LastEditors: Haruka
-LastEditTime: 2026-01-09 10:58:10
-FilePath: sam3_inference.py
+@Project:  CVKit
+@File:     sam3_inference.py
+@Author:   Haruka
+@Date:     2026/01/09 08:53:47
 """
 
 import numpy as np

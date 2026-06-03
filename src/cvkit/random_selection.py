@@ -1,8 +1,8 @@
 """
-@Project ：CVTools
-@File ：random_selection.py
-@Author ：Haruka
-@Date ：2025/10/7 08:29 
+@Project:  CVKit
+@File:     random_selection.py
+@Author:   Haruka
+@Date:     2025/10/7 08:29
 """
 import argparse
 import random

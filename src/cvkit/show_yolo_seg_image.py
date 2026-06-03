@@ -1,8 +1,8 @@
 """
-@Project : CVTools
-@File : show_yolo_seg_image.py
-@Author : Haruka
-@Date : 2026/1/23 16:06
+@Project:  CVKit
+@File:     show_yolo_seg_image.py
+@Author:   Haruka
+@Date:     2026/1/23 16:06
 """
 import argparse
 import os
