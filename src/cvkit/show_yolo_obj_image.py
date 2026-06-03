@@ -9,10 +9,10 @@ import os
 import argparse
 import cv2
 import numpy as np
-from cvtool.inference.yolo_inference import YoloObjInference
+from cvkit.inference.yolo_inference import YoloObjInference
 from tqdm import tqdm
 
-from cvtool.utils.logger import LoggerBuilder
+from cvkit.utils.logger import LoggerBuilder
 
 logger = LoggerBuilder().get_logger(name="data_split")
 

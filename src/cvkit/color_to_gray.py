@@ -13,7 +13,7 @@ import numpy as np
 
 import cv2
 
-from cvtool.utils.logger import LoggerBuilder
+from cvkit.utils.logger import LoggerBuilder
 
 logger = LoggerBuilder().get_logger(name="data_split")
 
