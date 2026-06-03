@@ -145,7 +145,7 @@ def sample_files_from_directories(src_dir: Path, dst_dir: Path, num_files: int, 
     logger.info("✅ 所有任务完成。")
 
 
-if __name__ == "__main__":
+def main() -> None:
     parser = argparse.ArgumentParser(description="随机抽取图片工具。")
     parser.add_argument('-i', '--input', type=str, required=True, help="源目录路径。")
     parser.add_argument('-o', '--output', type=str, required=True, help="目标目录路径。")
@@ -163,3 +163,7 @@ if __name__ == "__main__":
         args.num,
         args.model
     )
+
+
+if __name__ == "__main__":
+    main()

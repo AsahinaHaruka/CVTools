@@ -292,7 +292,7 @@ def parse_args():
     return parser.parse_args()
 
 
-if __name__ == "__main__":
+def main() -> None:
     multiprocessing.set_start_method("spawn", force=True)
     args = parse_args()
 
@@ -313,4 +313,8 @@ if __name__ == "__main__":
                    output_size=tuple(args.output_size) if args.output_size else None,
                    extract_fps=final_fps,
                    force_overwrite=args.force)
+
+
+if __name__ == "__main__":
+    main()
 

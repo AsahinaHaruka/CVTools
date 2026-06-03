@@ -57,7 +57,7 @@ def split_data(source_dir: str, dest_dir: str, train_ratio=0.8, val_ratio=0.1, t
     move_files(test_files, 'test')
 
 
-if __name__ == "__main__":
+def main() -> None:
     parser = argparse.ArgumentParser(description="Split dataset into train, val, and test sets.")
     parser.add_argument('-i', '--input', type=str, required=True,
                         help='Path to the source directory containing images and labels')
@@ -74,3 +74,7 @@ if __name__ == "__main__":
     logger.info(f"Train: {len(os.listdir(os.path.join(args.output, 'images', 'train')))} images")
     logger.info(f"Val: {len(os.listdir(os.path.join(args.output, 'images', 'val')))} images")
     logger.info(f"Test: {len(os.listdir(os.path.join(args.output, 'images', 'test')))} images")
+
+
+if __name__ == "__main__":
+    main()
