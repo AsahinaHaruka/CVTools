@@ -14,8 +14,8 @@ import numpy as np
 import multiprocessing
 from tqdm import tqdm
 
-from cvtools.utils.perspective_transformation import PerspectiveTransformer
-from cvtools.utils.logger import LoggerBuilder
+from cvtool.utils.perspective_transformation import PerspectiveTransformer
+from cvtool.utils.logger import LoggerBuilder
 
 logger = LoggerBuilder().get_logger(name="data_split")
 

@@ -9,7 +9,7 @@ import random
 import shutil
 from pathlib import Path
 
-from cvtools.utils.logger import LoggerBuilder
+from cvtool.utils.logger import LoggerBuilder
 
 logger = LoggerBuilder().get_logger(name="data_split")
 

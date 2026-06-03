@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "cvtools"
+name = "cvtool"
 version = "0.1.0"
 description = "A computer vision toolkit."
 readme = "README.md"
@@ -29,11 +29,11 @@ onnx-core = [
     "onnxslim>=0.1.74",
 ]
 onnx-cpu = [
-    "cvtools[onnx-core]",
+    "cvtool[onnx-core]",
     "onnxruntime>=1.23.2"
 ]
 onnx-gpu = [
-    "cvtools[onnx-core]",
+    "cvtool[onnx-core]",
     "onnxruntime-gpu>=1.23.2"
 ]
 sam = [
@@ -41,9 +41,9 @@ sam = [
 ]
 
 [project.scripts]
-cvtools-color-to-gray = "cvtools.color_to_gray:main"
-cvtools-data-split = "cvtools.data_split:main"
-cvtools-random-selection = "cvtools.random_selection:main"
-cvtools-show-yolo-obj = "cvtools.show_yolo_obj_image:main_cli"
-cvtools-show-yolo-seg = "cvtools.show_yolo_seg_image:main_cli"
-cvtools-video2image = "cvtools.video2image:main"
+cvtool-color-to-gray = "cvtool.color_to_gray:main"
+cvtool-data-split = "cvtool.data_split:main"
+cvtool-random-selection = "cvtool.random_selection:main"
+cvtool-show-yolo-obj = "cvtool.show_yolo_obj_image:main_cli"
+cvtool-show-yolo-seg = "cvtool.show_yolo_seg_image:main_cli"
+cvtool-video2image = "cvtool.video2image:main"

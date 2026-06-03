@@ -9,10 +9,10 @@ import os
 import cv2
 import numpy as np
 from tqdm import tqdm
-from cvtools.inference.yolo_inference import YoloSegInference
+from cvtool.inference.yolo_inference import YoloSegInference
 
 
-from cvtools.utils.logger import LoggerBuilder
+from cvtool.utils.logger import LoggerBuilder
 logger = LoggerBuilder().get_logger(name="yolo_seg")
 
 
