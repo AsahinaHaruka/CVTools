@@ -4,6 +4,7 @@
 @Author:   Haruka
 @Date:     2025/9/26 11:38
 """
+
 import argparse
 import sys
 from pathlib import Path
@@ -22,8 +23,8 @@ IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"}
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="批量将彩色图片转为灰度（OpenCV）")
-    p.add_argument('-i', '--input', help="输入目录路径")
-    p.add_argument('-o', '--output', help="输出目录路径")
+    p.add_argument("-i", "--input", help="输入目录路径")
+    p.add_argument("-o", "--output", help="输出目录路径")
     p.add_argument("--recursive", action="store_true", help="递归处理子目录")
     p.add_argument("--overwrite", action="store_true", help="若输出已存在则覆盖")
     return p.parse_args()
@@ -39,9 +40,17 @@ def is_subpath(child: Path, parent: Path) -> bool:
 
 def list_images(src: Path, recursive: bool) -> Iterable[Path]:
     if recursive:
-        yield from (p for p in src.rglob("*") if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS)
+        yield from (
+            p
+            for p in src.rglob("*")
+            if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS
+        )
     else:
-        yield from (p for p in src.iterdir() if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS)
+        yield from (
+            p
+            for p in src.iterdir()
+            if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS
+        )
 
 
 def to_gray(in_path: Path, out_path: Path, overwrite: bool) -> bool:
@@ -94,7 +103,9 @@ def main() -> None:
         sys.exit(1)
 
     if is_subpath(dst, src):
-        logger.error(f"[错误] 输出目录 `{dst}` 不可位于输入目录 `{src}` 内，请选择不同位置。")
+        logger.error(
+            f"[错误] 输出目录 `{dst}` 不可位于输入目录 `{src}` 内，请选择不同位置。"
+        )
         sys.exit(1)
 
     dst.mkdir(parents=True, exist_ok=True)
@@ -114,7 +125,9 @@ def main() -> None:
         else:
             skipped += 1
 
-    logger.info(f"[完成] 共发现 {len(files)} 张图片，转换 {converted}，跳过 {skipped}。输出目录: {dst}")
+    logger.info(
+        f"[完成] 共发现 {len(files)} 张图片，转换 {converted}，跳过 {skipped}。输出目录: {dst}"
+    )
 
 
 if __name__ == "__main__":

@@ -1,8 +1,8 @@
 """
-@Project ：CVTools
+@Project ：CVKit
 @File ：data_define.py
 @Author ：Haruka
-@Date ：2025/8/22 16:01 
+@Date ：2025/8/22 16:01
 """
 
 from dataclasses import dataclass, field
@@ -22,7 +22,8 @@ class Area:
         区域划分,形如 `(start_x, start_y, end_x, end_y)
         表示一个矩形区域的左上角与右下角坐标。
     """
-    area:Tuple = field(repr=False)  # 隐藏原始入参
+
+    area: Tuple = field(repr=False)  # 隐藏原始入参
 
     # 标准化后的坐标
     start_x: int = field(init=False)
@@ -31,7 +32,7 @@ class Area:
     end_y: int = field(init=False)
 
     def __post_init__(self):
-        sx, sy, ex, ey= self.area
+        sx, sy, ex, ey = self.area
         # 保证 start 始终 ≤ end
         self.start_x = min(sx, ex)
         self.start_y = min(sy, ey)

@@ -4,6 +4,7 @@
 @Author : Haruka
 @Date : 2026/1/8 16:36
 """
+
 import math
 import os
 from typing import Sequence
@@ -24,23 +25,23 @@ DTYPE_MAPPING = {
     "tensor(int64)": np.int64,
     "tensor(uint8)": np.uint8,
     "tensor(int8)": np.int8,
-    "tensor(bool)": bool
+    "tensor(bool)": bool,
 }
 
 
 class ONNXInference:
     def __init__(
-            self,
-            model_path: str,
-            enable_trt_profile: bool = False,
-            stride: int = 32,
-            min_batch_size: int = 1,
-            opt_batch_size: int = 5,
-            max_batch_size: int = 5,
-            input_image_size: tuple[int, int] | None = None,
-            target_long_side: int = 640,
-            other_size: tuple[int, int, int] = (0, 100, 200),
-            execution_provider: tuple[str, ...] = ("trt", "cuda", "CoreML", "cpu"),
+        self,
+        model_path: str,
+        enable_trt_profile: bool = False,
+        stride: int = 32,
+        min_batch_size: int = 1,
+        opt_batch_size: int = 5,
+        max_batch_size: int = 5,
+        input_image_size: tuple[int, int] | None = None,
+        target_long_side: int = 640,
+        other_size: tuple[int, int, int] = (0, 100, 200),
+        execution_provider: tuple[str, ...] = ("trt", "cuda", "CoreML", "cpu"),
     ):
         """初始化 ONNX 推理会话。
 
@@ -94,7 +95,10 @@ class ONNXInference:
 
         available_providers = ort.get_available_providers()
         logger.debug(f"ℹ️ [Init] 系统当前可用后端: {available_providers}")
-        is_trt_active = "trt" in execution_provider and "TensorrtExecutionProvider" in available_providers
+        is_trt_active = (
+            "trt" in execution_provider
+            and "TensorrtExecutionProvider" in available_providers
+        )
 
         fixed_h, fixed_w, has_dynamic = self._check_static_shape()
 
@@ -103,27 +107,28 @@ class ONNXInference:
             self.img_size = (fixed_h, fixed_w)
             self.fix_image = True
 
-            logger.info(f"ℹ️ [Init] 检测到模型图像输入尺寸固定，强制使用固定图像输入: {self.img_size}")
+            logger.info(
+                f"ℹ️ [Init] 检测到模型图像输入尺寸固定，强制使用固定图像输入: {self.img_size}"
+            )
 
         else:
             if is_trt_active and enable_trt_profile:
                 self.fix_image = True
 
             self.img_size = self._get_inference_size(
-                self.target_long_side,
-                stride,
-                input_image_size
+                self.target_long_side, stride, input_image_size
             )
             if self.fix_image:
                 logger.info(
-                    f"ℹ️ [Init] 使用固定推理尺寸。尺寸计算: 输入图片尺寸{input_image_size}，目标长边 {target_long_side} -> 计算推理尺寸 {self.img_size}")
+                    f"ℹ️ [Init] 使用固定推理尺寸。尺寸计算: 输入图片尺寸{input_image_size}，目标长边 {target_long_side} -> 计算推理尺寸 {self.img_size}"
+                )
             else:
                 logger.info(f"ℹ️ [Init] 使用动态推理尺寸。目标长边 {target_long_side}")
 
         trt_provider_options = {
-            'device_id': 0,
-            'trt_max_workspace_size': 4 * 1024 * 1024 * 1024,  # 4GB
-            'trt_fp16_enable': True,
+            "device_id": 0,
+            "trt_max_workspace_size": 4 * 1024 * 1024 * 1024,  # 4GB
+            "trt_fp16_enable": True,
         }
 
         providers = []
@@ -133,10 +138,12 @@ class ONNXInference:
                 trt_profile_options = self._build_trt_profile(other_size)
 
                 if trt_profile_options:
-                    logger.info(f"ℹ️ [Init] 设置TensorRT 动态形状优化参数:\n"
-                                f"   Min: {trt_profile_options['trt_profile_min_shapes']}\n"
-                                f"   Opt: {trt_profile_options['trt_profile_opt_shapes']}\n"
-                                f"   Max: {trt_profile_options['trt_profile_max_shapes']}")
+                    logger.info(
+                        f"ℹ️ [Init] 设置TensorRT 动态形状优化参数:\n"
+                        f"   Min: {trt_profile_options['trt_profile_min_shapes']}\n"
+                        f"   Opt: {trt_profile_options['trt_profile_opt_shapes']}\n"
+                        f"   Max: {trt_profile_options['trt_profile_max_shapes']}"
+                    )
 
                     trt_provider_options.update(trt_profile_options)
 
@@ -145,31 +152,43 @@ class ONNXInference:
                 cache_dir = os.path.join("trt_cache", f"{model_name}__{shape_tag}")
                 os.makedirs(cache_dir, exist_ok=True)
 
-                trt_provider_options.update({
-                    "trt_engine_cache_enable": True,
-                    "trt_engine_cache_path": cache_dir,
-                })
+                trt_provider_options.update(
+                    {
+                        "trt_engine_cache_enable": True,
+                        "trt_engine_cache_path": cache_dir,
+                    }
+                )
             # 只有当环境支持 TRT 时，才传入配置好的 trt_provider_options
             providers.append(("TensorrtExecutionProvider", trt_provider_options))
 
         #  CUDA
-        if "cuda" in execution_provider and "CUDAExecutionProvider" in available_providers:
+        if (
+            "cuda" in execution_provider
+            and "CUDAExecutionProvider" in available_providers
+        ):
             providers.append("CUDAExecutionProvider")
 
         # CoreML
-        if "CoreML" in execution_provider and "CoreMLExecutionProvider" in available_providers:
+        if (
+            "CoreML" in execution_provider
+            and "CoreMLExecutionProvider" in available_providers
+        ):
             if has_dynamic:
-                logger.warning("⚠️ [WARNING] 检测到模型存在动态维度，使用CoreML速度可能不如CPU")
+                logger.warning(
+                    "⚠️ [WARNING] 检测到模型存在动态维度，使用CoreML速度可能不如CPU"
+                )
 
-            providers.append((
-                "CoreMLExecutionProvider",
-                {
-                    "ModelFormat": "MLProgram",
-                    "MLComputeUnits": "ALL",
-                    "RequireStaticInputShapes": "1",
-                    "EnableOnSubgraphs": "0",
-                },
-            ))
+            providers.append(
+                (
+                    "CoreMLExecutionProvider",
+                    {
+                        "ModelFormat": "MLProgram",
+                        "MLComputeUnits": "ALL",
+                        "RequireStaticInputShapes": "1",
+                        "EnableOnSubgraphs": "0",
+                    },
+                )
+            )
 
         # CPU
         if "cpu" in execution_provider:
@@ -177,25 +196,35 @@ class ONNXInference:
 
         # 3. 创建正式的推理 Session
         session_options = ort.SessionOptions()
-        session_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+        session_options.graph_optimization_level = (
+            ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+        )
         session_options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
         session_options.log_severity_level = 3
 
-        self.session = ort.InferenceSession(model_bytes, sess_options=session_options, providers=providers)
-        logger.info(f"ℹ️ [Init] 模型加载成功! 运行设备: {self.session.get_providers()[0]}")
+        self.session = ort.InferenceSession(
+            model_bytes, sess_options=session_options, providers=providers
+        )
+        logger.info(
+            f"ℹ️ [Init] 模型加载成功! 运行设备: {self.session.get_providers()[0]}"
+        )
 
     @staticmethod
     def _scan_model_io(model_bytes: bytes):
         """扫描模型的输入输出元数据"""
-        temp_sess = ort.InferenceSession(model_bytes, providers=['CPUExecutionProvider'])
+        temp_sess = ort.InferenceSession(
+            model_bytes, providers=["CPUExecutionProvider"]
+        )
 
         inputs = []
         for inp in temp_sess.get_inputs():
-            inputs.append({
-                'name': inp.name,
-                'shape': inp.shape,
-                'type': DTYPE_MAPPING.get(inp.type, np.float32)
-            })
+            inputs.append(
+                {
+                    "name": inp.name,
+                    "shape": inp.shape,
+                    "type": DTYPE_MAPPING.get(inp.type, np.float32),
+                }
+            )
         logger.debug(f"Input Meta {inputs}")
 
         output_names = [out.name for out in temp_sess.get_outputs()]
@@ -213,12 +242,12 @@ class ONNXInference:
         has_dynamic = False
 
         for meta in self.input_meta:
-            shape = meta['shape']
-            
+            shape = meta["shape"]
+
             for dim in shape:
                 if not isinstance(dim, int):
                     has_dynamic = True
-                    
+
             # 如果是 4 维张量，通常认为是 NCHW 的图像输入
             if len(shape) == 4:
                 h = shape[2]
@@ -229,7 +258,9 @@ class ONNXInference:
 
         return fixed_h, fixed_w, has_dynamic
 
-    def _get_inference_size(self, target_long: int, stride: int, input_wh: tuple[int, int] = None) -> tuple[int, int]:
+    def _get_inference_size(
+        self, target_long: int, stride: int, input_wh: tuple[int, int] = None
+    ) -> tuple[int, int]:
         """
         统一计算推理尺寸，并强制执行 Stride 对齐检查。
 
@@ -269,7 +300,8 @@ class ONNXInference:
 
         if new_h != expected_h or new_w != expected_w:
             logger.warning(
-                f"⚠️ [WARNING] 图片尺寸[{expected_h}, {expected_w}] 需要被 stride「{stride}」整除, 向上取整到[{new_h}, {new_w}]")
+                f"⚠️ [WARNING] 图片尺寸[{expected_h}, {expected_w}] 需要被 stride「{stride}」整除, 向上取整到[{new_h}, {new_w}]"
+            )
 
         return new_h, new_w
 
@@ -284,8 +316,8 @@ class ONNXInference:
         max_profiles = []
 
         for meta in self.input_meta:
-            name = meta['name']
-            shape = meta['shape']
+            name = meta["name"]
+            shape = meta["shape"]
 
             # 维度配置列表
             p_min, p_opt, p_max = [], [], []
@@ -310,7 +342,7 @@ class ONNXInference:
                         p_opt.append(val)
                         p_max.append(val)
                     else:
-                        # 如果需要更精细控制，需要额外传参，这里给默认 1-100-200 策略或根据需求修改
+                        # 非图像动态维度
                         p_min.append(other_size[0])
                         p_opt.append(other_size[1])
                         p_max.append(other_size[2])  # 非图像动态维度的上限
@@ -321,13 +353,14 @@ class ONNXInference:
             max_profiles.append(f"{name}:{'x'.join(map(str, p_max))}")
 
         return {
-            'trt_profile_min_shapes': ','.join(min_profiles),
-            'trt_profile_opt_shapes': ','.join(opt_profiles),
-            'trt_profile_max_shapes': ','.join(max_profiles)
+            "trt_profile_min_shapes": ",".join(min_profiles),
+            "trt_profile_opt_shapes": ",".join(opt_profiles),
+            "trt_profile_max_shapes": ",".join(max_profiles),
         }
 
-    def __call__(self, input_data: dict[str, np.ndarray] | list[np.ndarray] | np.ndarray) -> Sequence[
-        ndarray | SparseTensor | list | dict]:
+    def __call__(
+        self, input_data: dict[str, np.ndarray] | list[np.ndarray] | np.ndarray
+    ) -> Sequence[ndarray | SparseTensor | list | dict]:
         """执行 ONNX 模型的推理。
 
         此方法根据 `input_data` 的类型自动构建 `feed_dict`，然后执行 ONNX Runtime 会话。
@@ -360,15 +393,17 @@ class ONNXInference:
 
         elif isinstance(input_data, (list, tuple)):
             if len(input_data) != len(self.input_meta):
-                raise ValueError(f"输入数量不匹配: 提供 {len(input_data)}, 模型需要 {len(self.input_meta)}")
+                raise ValueError(
+                    f"输入数量不匹配: 提供 {len(input_data)}, 模型需要 {len(self.input_meta)}"
+                )
             for i, data in enumerate(input_data):
-                feed_dict[self.input_meta[i]['name']] = data
+                feed_dict[self.input_meta[i]["name"]] = data
 
         else:
             # 单个 array
             if len(self.input_meta) != 1:
                 raise ValueError("模型有多个输入，请使用 List 或 Dict 传参")
-            feed_dict[self.input_meta[0]['name']] = input_data
+            feed_dict[self.input_meta[0]["name"]] = input_data
 
         # 执行推理
         # outputs 是一个 list，顺序对应 self.output_names
@@ -379,14 +414,14 @@ class ONNXInference:
     def __del__(self):
         """清理资源"""
         try:
-            if hasattr(self, 'session'):
+            if hasattr(self, "session"):
                 del self.session
         except Exception:
             pass
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         try:
-            if hasattr(self, 'session'):
+            if hasattr(self, "session"):
                 del self.session
         except Exception:
             pass

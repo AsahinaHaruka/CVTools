@@ -4,6 +4,7 @@
 @Author:   Haruka
 @Date:     2025/8/22 08:58
 """
+
 from typing import overload, Literal
 import numpy as np
 
@@ -13,16 +14,18 @@ from cvkit.utils.data_define import Area
 
 
 class YoloObjInference:
-    def __init__(self,
-                 model_path: str,
-                 enable_trt_profile: bool = False,
-                 stride: int = 32,
-                 min_batch_size: int = 1,
-                 opt_batch_size: int = 5,
-                 max_batch_size: int = 5,
-                 input_image_size: tuple[int, int] | None = None,
-                 target_long_side: int = 640,
-                 execution_provider: tuple[str, ...] = ("trt", "cuda", "CoreML", "cpu")):
+    def __init__(
+        self,
+        model_path: str,
+        enable_trt_profile: bool = False,
+        stride: int = 32,
+        min_batch_size: int = 1,
+        opt_batch_size: int = 5,
+        max_batch_size: int = 5,
+        input_image_size: tuple[int, int] | None = None,
+        target_long_side: int = 640,
+        execution_provider: tuple[str, ...] = ("trt", "cuda", "CoreML", "cpu"),
+    ):
         """初始化 YOLO 推理会话。
 
         加载 YOLO ONNX 模型并配置推理会话选项。支持 TensorRT 执行提供程序及其动态形状配置。
@@ -56,24 +59,29 @@ class YoloObjInference:
         Raises:
             FileNotFoundError: 如果 `model_path` 指定的文件不存在。
         """
-        self.model = ONNXInference(model_path=model_path,
-                                   stride=stride,
-                                   enable_trt_profile=enable_trt_profile,
-                                   min_batch_size=min_batch_size,
-                                   opt_batch_size=opt_batch_size,
-                                   max_batch_size=max_batch_size,
-                                   input_image_size=input_image_size,
-                                   target_long_side=target_long_side,
-                                   execution_provider=execution_provider
-                                   )
+        self.model = ONNXInference(
+            model_path=model_path,
+            stride=stride,
+            enable_trt_profile=enable_trt_profile,
+            min_batch_size=min_batch_size,
+            opt_batch_size=opt_batch_size,
+            max_batch_size=max_batch_size,
+            input_image_size=input_image_size,
+            target_long_side=target_long_side,
+            execution_provider=execution_provider,
+        )
 
-        self.image_processor = ImageProcessor(target_size=self.model.img_size,
-                                              stride=self.model.stride,
-                                              is_fixed_size=self.model.fix_image,
-                                              fill_value=144,
-                                              dtype=self.model.input_meta[0]['type'])
+        self.image_processor = ImageProcessor(
+            target_size=self.model.img_size,
+            stride=self.model.stride,
+            is_fixed_size=self.model.fix_image,
+            fill_value=144,
+            dtype=self.model.input_meta[0]["type"],
+        )
 
-    def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw: bool = False) -> np.ndarray:
+    def __call__(
+        self, input_data: list[np.ndarray] | np.ndarray, raw: bool = False
+    ) -> np.ndarray:
         """执行 YOLO 模型的推理。
 
         该方法首先对输入图像数据进行预处理，然后将处理后的图像输入模型进行推理。
@@ -96,23 +104,29 @@ class YoloObjInference:
 
         # 执行推理
         outputs = self.model(processed_input)[0].astype(np.float32)
-        return outputs if raw else self.image_processor.restore_boxes(outputs, transform_params)
+        return (
+            outputs
+            if raw
+            else self.image_processor.restore_boxes(outputs, transform_params)
+        )
 
 
 class AreaAvgInference(YoloObjInference):
-    def __init__(self,
-                 model_path: str,
-                 areas: list[Area],
-                 area_class: list[int] = None,
-                 confidence: float = 0.5,
-                 class_num: int = 3,
-                 enable_trt_profile: bool = True,
-                 stride: int = 32,
-                 min_batch_size: int = 1,
-                 opt_batch_size: int = 5,
-                 max_batch_size: int = 5,
-                 input_image_size: tuple[int, int] | None = None,
-                 target_long_side: int = 640):
+    def __init__(
+        self,
+        model_path: str,
+        areas: list[Area],
+        area_class: list[int] = None,
+        confidence: float = 0.5,
+        class_num: int = 3,
+        enable_trt_profile: bool = True,
+        stride: int = 32,
+        min_batch_size: int = 1,
+        opt_batch_size: int = 5,
+        max_batch_size: int = 5,
+        input_image_size: tuple[int, int] | None = None,
+        target_long_side: int = 640,
+    ):
         """初始化区域平均推理会话。
 
         Args:
@@ -144,48 +158,58 @@ class AreaAvgInference(YoloObjInference):
         Raises:
             FileNotFoundError: 如果 `model_path` 指定的文件不存在。
         """
-        super().__init__(model_path=model_path,
-                         stride=stride,
-                         enable_trt_profile=enable_trt_profile,
-                         min_batch_size=min_batch_size,
-                         opt_batch_size=opt_batch_size,
-                         max_batch_size=max_batch_size,
-                         input_image_size=input_image_size,
-                         target_long_side=target_long_side
-                         )
+        super().__init__(
+            model_path=model_path,
+            stride=stride,
+            enable_trt_profile=enable_trt_profile,
+            min_batch_size=min_batch_size,
+            opt_batch_size=opt_batch_size,
+            max_batch_size=max_batch_size,
+            input_image_size=input_image_size,
+            target_long_side=target_long_side,
+        )
         self.confidence = confidence
         self.class_num = class_num
-        self.areas = np.array([[area.start_x, area.start_y, area.end_x, area.end_y] for area in areas],
-                              dtype=np.float32)
+        self.areas = np.array(
+            [[area.start_x, area.start_y, area.end_x, area.end_y] for area in areas],
+            dtype=np.float32,
+        )
         if area_class is not None:
             # 确保每个区域都有一个对应的类别要求
             if len(area_class) != len(areas):
-                raise ValueError(f"area_class 的长度 ({len(area_class)}) 必须与 areas 的长度 ({len(areas)}) 一致。")
+                raise ValueError(
+                    f"area_class 的长度 ({len(area_class)}) 必须与 areas 的长度 ({len(areas)}) 一致。"
+                )
 
             # 类型与数值边界校验
             for i, class_id in enumerate(area_class):
                 if not isinstance(class_id, int):
                     raise TypeError(
-                        f"search_list 第 {i} 个元素 '{class_id}' 类型错误。每个区域仅需一个类别，必须为整数 (int)。")
+                        f"search_list 第 {i} 个元素 '{class_id}' 类型错误。每个区域仅需一个类别，必须为整数 (int)。"
+                    )
 
                 if not (-1 <= class_id < class_num):
                     raise ValueError(
-                        f"search_list 第 {i} 个元素的 class_id ({class_id}) 越界。合法范围是 -1 到 {class_num - 1} (-1 表示类别投票)。")
+                        f"search_list 第 {i} 个元素的 class_id ({class_id}) 越界。合法范围是 -1 到 {class_num - 1} (-1 表示类别投票)。"
+                    )
 
             self.area_class = tuple(area_class)
         else:
             self.area_class = None
 
     @overload
-    def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw: Literal[False] = ...) -> np.ndarray:
-        ...
+    def __call__(
+        self, input_data: list[np.ndarray] | np.ndarray, raw: Literal[False] = ...
+    ) -> np.ndarray: ...
 
     @overload
-    def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw: Literal[True] = ...) -> dict[str, np.ndarray]:
-        ...
+    def __call__(
+        self, input_data: list[np.ndarray] | np.ndarray, raw: Literal[True] = ...
+    ) -> dict[str, np.ndarray]: ...
 
-    def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw: bool = False) -> np.ndarray | dict[
-        str, np.ndarray]:
+    def __call__(
+        self, input_data: list[np.ndarray] | np.ndarray, raw: bool = False
+    ) -> np.ndarray | dict[str, np.ndarray]:
         """对输入图片进行推理，然后根据预定义区域进行结果合并。
 
         该方法首先调用YOLO目标检测方法获取原始的检测结果。
@@ -211,14 +235,33 @@ class AreaAvgInference(YoloObjInference):
         """
         raw_output = super().__call__(input_data, raw=False)  # [batch, 300, 6]
 
-        result = process_detections(raw_output, self.areas, self.confidence, len(self.areas), self.class_num,
-                                    self.area_class)
+        result = process_detections(
+            raw_output,
+            self.areas,
+            self.confidence,
+            len(self.areas),
+            self.class_num,
+            self.area_class,
+        )
 
-        return {'detections': raw_output, 'area_avg': result, } if raw else result
+        return (
+            {
+                "detections": raw_output,
+                "area_avg": result,
+            }
+            if raw
+            else result
+        )
 
 
-def process_detections(raw_output: np.ndarray, area_bounds: np.ndarray, confidence: float,
-                       num_areas: int, class_num: int, area_class: tuple[int, ...]) -> np.ndarray:
+def process_detections(
+    raw_output: np.ndarray,
+    area_bounds: np.ndarray,
+    confidence: float,
+    num_areas: int,
+    class_num: int,
+    area_class: tuple[int, ...],
+) -> np.ndarray:
     """处理经过NMS的检测输出，并根据预定义区域进行加权平均和类别投票。
 
     该函数将所有批次中置信度高于阈值的检测结果合并，然后根据每个检测框的中心点，
@@ -269,10 +312,12 @@ def process_detections(raw_output: np.ndarray, area_bounds: np.ndarray, confiden
     # all_centers: [n_valid, 2], area_bounds: [num_areas, 4]
     centers_expanded = all_centers[:, np.newaxis, :]  # [n_valid, 1, 2]
     bounds_expanded = area_bounds[np.newaxis, :, :]  # [1, num_areas, 4]
-    in_x_range = ((centers_expanded[:, :, 0] >= bounds_expanded[:, :, 0]) &
-                  (centers_expanded[:, :, 0] <= bounds_expanded[:, :, 2]))
-    in_y_range = ((centers_expanded[:, :, 1] >= bounds_expanded[:, :, 1]) &
-                  (centers_expanded[:, :, 1] <= bounds_expanded[:, :, 3]))
+    in_x_range = (centers_expanded[:, :, 0] >= bounds_expanded[:, :, 0]) & (
+        centers_expanded[:, :, 0] <= bounds_expanded[:, :, 2]
+    )
+    in_y_range = (centers_expanded[:, :, 1] >= bounds_expanded[:, :, 1]) & (
+        centers_expanded[:, :, 1] <= bounds_expanded[:, :, 3]
+    )
     in_area_matrix = in_x_range & in_y_range  # [n_valid, num_areas]
 
     # 初始化结果
@@ -296,11 +341,13 @@ def process_detections(raw_output: np.ndarray, area_bounds: np.ndarray, confiden
             final_class = area_class[area_idx]
         else:
             # 类别投票 (确定主导类别) 使用分数加权投票
-            class_votes = np.bincount(current_classes, weights=current_scores, minlength=class_num)
+            class_votes = np.bincount(
+                current_classes, weights=current_scores, minlength=class_num
+            )
             final_class = np.argmax(class_votes)
 
         # 只保留属于主导类别的框
-        target_mask = (current_classes == final_class)
+        target_mask = current_classes == final_class
 
         if not np.any(target_mask):
             continue
@@ -320,18 +367,19 @@ def process_detections(raw_output: np.ndarray, area_bounds: np.ndarray, confiden
 
 
 class NumCountInference(YoloObjInference):
-    def __init__(self,
-                 model_path: str,
-                 target_classes: list[int] | int | None = None,
-                 confidence: float = 0.5,
-                 enable_trt_profile: bool = True,
-                 stride: int = 32,
-                 min_batch_size: int = 1,
-                 opt_batch_size: int = 5,
-                 max_batch_size: int = 5,
-                 input_image_size: tuple[int, int] | None = None,
-                 target_long_side: int = 640
-                 ):
+    def __init__(
+        self,
+        model_path: str,
+        target_classes: list[int] | int | None = None,
+        confidence: float = 0.5,
+        enable_trt_profile: bool = True,
+        stride: int = 32,
+        min_batch_size: int = 1,
+        opt_batch_size: int = 5,
+        max_batch_size: int = 5,
+        input_image_size: tuple[int, int] | None = None,
+        target_long_side: int = 640,
+    ):
         """初始化数量统计推理会话。
 
         Args:
@@ -363,15 +411,16 @@ class NumCountInference(YoloObjInference):
             FileNotFoundError: 如果 `model_path` 指定的文件不存在。
         """
 
-        super().__init__(model_path=model_path,
-                         stride=stride,
-                         enable_trt_profile=enable_trt_profile,
-                         min_batch_size=min_batch_size,
-                         opt_batch_size=opt_batch_size,
-                         max_batch_size=max_batch_size,
-                         input_image_size=input_image_size,
-                         target_long_side=target_long_side
-                         )
+        super().__init__(
+            model_path=model_path,
+            stride=stride,
+            enable_trt_profile=enable_trt_profile,
+            min_batch_size=min_batch_size,
+            opt_batch_size=opt_batch_size,
+            max_batch_size=max_batch_size,
+            input_image_size=input_image_size,
+            target_long_side=target_long_side,
+        )
         self.confidence = confidence
 
         if isinstance(target_classes, int):
@@ -382,16 +431,18 @@ class NumCountInference(YoloObjInference):
             self.target_classes = None
 
     @overload
-    def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw: Literal[False] = ...) -> int | list[int]:
-        ...
+    def __call__(
+        self, input_data: list[np.ndarray] | np.ndarray, raw: Literal[False] = ...
+    ) -> int | list[int]: ...
 
     @overload
-    def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw: Literal[True] = ...) -> dict[
-        str, int | list[int]]:
-        ...
+    def __call__(
+        self, input_data: list[np.ndarray] | np.ndarray, raw: Literal[True] = ...
+    ) -> dict[str, int | list[int]]: ...
 
-    def __call__(self, input_data: list[np.ndarray] | np.ndarray, raw: bool = False) -> int | list[int] | dict[
-        str, int | list[int]]:
+    def __call__(
+        self, input_data: list[np.ndarray] | np.ndarray, raw: bool = False
+    ) -> int | list[int] | dict[str, int | list[int]]:
         """对输入图片进行推理，并进行NMS和过滤（置信度和类别），然后计算目标数量。
 
         该方法首先调用YOLO目标检测方法获取原始的检测结果。
@@ -433,7 +484,9 @@ class NumCountInference(YoloObjInference):
                 if len(batch_counts) == 1:
                     num_count.append(int(batch_counts[0]))
                 else:
-                    unique_counts, frequencies = np.unique(batch_counts, return_counts=True)
+                    unique_counts, frequencies = np.unique(
+                        batch_counts, return_counts=True
+                    )
                     mode_index = np.argmax(frequencies)
                     num_count.append(int(unique_counts[mode_index]))
 
@@ -449,21 +502,23 @@ class NumCountInference(YoloObjInference):
 
             num_count = int(unique_counts[mode_index])
 
-        return {'detections': raw_output, 'num_count': num_count} if raw else num_count
+        return {"detections": raw_output, "num_count": num_count} if raw else num_count
 
 
 class YoloSegInference:
-    def __init__(self,
-                 model_path: str,
-                 enable_trt_profile: bool = False,
-                 stride: int = 32,
-                 min_batch_size: int = 1,
-                 opt_batch_size: int = 5,
-                 max_batch_size: int = 5,
-                 input_image_size: tuple[int, int] | None = None,
-                 target_long_side: int = 640,
-                 execution_provider: tuple[str, ...] = ("trt", "cuda", "CoreML", "cpu"),
-                 uniform_transform: bool = False):
+    def __init__(
+        self,
+        model_path: str,
+        enable_trt_profile: bool = False,
+        stride: int = 32,
+        min_batch_size: int = 1,
+        opt_batch_size: int = 5,
+        max_batch_size: int = 5,
+        input_image_size: tuple[int, int] | None = None,
+        target_long_side: int = 640,
+        execution_provider: tuple[str, ...] = ("trt", "cuda", "CoreML", "cpu"),
+        uniform_transform: bool = False,
+    ):
         """初始化 YOLO 实例分割推理会话。
 
         加载 YOLO ONNX 模型并配置推理会话选项。支持 TensorRT 执行提供程序及其动态形状配置。
@@ -498,48 +553,58 @@ class YoloSegInference:
         Raises:
             FileNotFoundError: 如果 `model_path` 指定的文件不存在。
         """
-        self.model = ONNXInference(model_path=model_path,
-                                   stride=stride,
-                                   enable_trt_profile=enable_trt_profile,
-                                   min_batch_size=min_batch_size,
-                                   opt_batch_size=opt_batch_size,
-                                   max_batch_size=max_batch_size,
-                                   input_image_size=input_image_size,
-                                   target_long_side=target_long_side,
-                                   execution_provider=execution_provider
-                                   )
+        self.model = ONNXInference(
+            model_path=model_path,
+            stride=stride,
+            enable_trt_profile=enable_trt_profile,
+            min_batch_size=min_batch_size,
+            opt_batch_size=opt_batch_size,
+            max_batch_size=max_batch_size,
+            input_image_size=input_image_size,
+            target_long_side=target_long_side,
+            execution_provider=execution_provider,
+        )
 
-        self.image_processor = ImageProcessor(target_size=self.model.img_size,
-                                              stride=self.model.stride,
-                                              is_fixed_size=self.model.fix_image,
-                                              fill_value=144,
-                                              dtype=self.model.input_meta[0]['type'],
-                                              uniform_transform=uniform_transform)
-
-    @overload
-    def __call__(self, input_data: list[np.ndarray] | np.ndarray,
-                 conf_threshold: float = 0.25,
-                 mask_threshold: float = 0.5,
-                 return_boxes: bool = True,
-                 return_masks: bool = True,
-                 raw: Literal[True] = ...) -> dict[str, np.ndarray]:
-        ...
+        self.image_processor = ImageProcessor(
+            target_size=self.model.img_size,
+            stride=self.model.stride,
+            is_fixed_size=self.model.fix_image,
+            fill_value=144,
+            dtype=self.model.input_meta[0]["type"],
+            uniform_transform=uniform_transform,
+        )
 
     @overload
-    def __call__(self, input_data: list[np.ndarray] | np.ndarray,
-                 conf_threshold: float = 0.25,
-                 mask_threshold: float = 0.5,
-                 return_boxes: bool = True,
-                 return_masks: bool = True,
-                 raw: Literal[False] = ...) -> dict[str, list[np.ndarray]]:
-        ...
+    def __call__(
+        self,
+        input_data: list[np.ndarray] | np.ndarray,
+        conf_threshold: float = 0.25,
+        mask_threshold: float = 0.5,
+        return_boxes: bool = True,
+        return_masks: bool = True,
+        raw: Literal[True] = ...,
+    ) -> dict[str, np.ndarray]: ...
 
-    def __call__(self, input_data: list[np.ndarray] | np.ndarray,
-                 conf_threshold: float = 0.25,
-                 mask_threshold: float = 0.5,
-                 return_boxes: bool = True,
-                 return_masks: bool = True,
-                 raw: bool = False) -> dict[str, list[np.ndarray] | np.ndarray]:
+    @overload
+    def __call__(
+        self,
+        input_data: list[np.ndarray] | np.ndarray,
+        conf_threshold: float = 0.25,
+        mask_threshold: float = 0.5,
+        return_boxes: bool = True,
+        return_masks: bool = True,
+        raw: Literal[False] = ...,
+    ) -> dict[str, list[np.ndarray]]: ...
+
+    def __call__(
+        self,
+        input_data: list[np.ndarray] | np.ndarray,
+        conf_threshold: float = 0.25,
+        mask_threshold: float = 0.5,
+        return_boxes: bool = True,
+        return_masks: bool = True,
+        raw: bool = False,
+    ) -> dict[str, list[np.ndarray] | np.ndarray]:
         """执行 YOLO 分割模型的推理。
 
         该方法首先对输入图像数据进行预处理，然后将处理后的图像输入模型进行推理。
@@ -574,9 +639,9 @@ class YoloSegInference:
 
         if raw:
             return {
-                'boxes': detections[..., :6],
-                'mask_coefficients': detections[..., 6:],
-                'protos': protos
+                "boxes": detections[..., :6],
+                "mask_coefficients": detections[..., 6:],
+                "protos": protos,
             }
 
         batch_raw_boxes = []  # 收集原始检测框
@@ -621,20 +686,19 @@ class YoloSegInference:
 
         if return_boxes:
             restored_boxes_list = self.image_processor.restore_boxes(
-                batch_raw_boxes,
-                transform_params
+                batch_raw_boxes, transform_params
             )
 
             # 只需要前6列 (xyxy, conf, cls)
-            res['box'] = [b[:, :6] for b in restored_boxes_list]
+            res["box"] = [b[:, :6] for b in restored_boxes_list]
 
         if return_masks:
-            res['masks'] = self.image_processor.restore_masks(
+            res["masks"] = self.image_processor.restore_masks(
                 masks=batch_raw_masks,  # List[np.ndarray]
                 transform_params=transform_params,
                 boxes=[b[:, :4] for b in batch_raw_boxes],
                 mask_threshold=mask_threshold,
-                uniform_transform=False
+                uniform_transform=False,
             )
 
         return res

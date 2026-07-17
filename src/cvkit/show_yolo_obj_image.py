@@ -2,7 +2,7 @@
 @Project:  CVKit
 @File:     show_yolo_obj_image.py
 @Author:   Haruka
-@Date:     2025/12/10 08:29 
+@Date:     2025/12/10 08:29
 """
 
 import os
@@ -16,7 +16,10 @@ from cvkit.utils.logger import LoggerBuilder
 
 logger = LoggerBuilder().get_logger(name="data_split")
 
-def draw_detections(image: np.ndarray, detections: np.ndarray, conf_threshold: float = 0.5) -> np.ndarray:
+
+def draw_detections(
+    image: np.ndarray, detections: np.ndarray, conf_threshold: float = 0.5
+) -> np.ndarray:
     """
     在图像上绘制检测结果。
 
@@ -47,13 +50,29 @@ def draw_detections(image: np.ndarray, detections: np.ndarray, conf_threshold: f
 
         # 准备标签文本
         label = f"Class {class_id}: {score:.2f}"
-        (label_width, label_height), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+        (label_width, label_height), baseline = cv2.getTextSize(
+            label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1
+        )
 
         # 绘制标签背景
-        cv2.rectangle(image, (box[0], box[1] - label_height - baseline), (box[0] + label_width, box[1]), color, -1)
+        cv2.rectangle(
+            image,
+            (box[0], box[1] - label_height - baseline),
+            (box[0] + label_width, box[1]),
+            color,
+            -1,
+        )
 
         # 绘制标签文字
-        cv2.putText(image, label, (box[0], box[1] - baseline), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        cv2.putText(
+            image,
+            label,
+            (box[0], box[1] - baseline),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (255, 255, 255),
+            1,
+        )
 
     return image
 
@@ -72,8 +91,10 @@ def main(args: argparse.Namespace) -> None:
 
     # 2. 准备输入输出目录
     os.makedirs(args.output, exist_ok=True)
-    image_extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.webp')
-    image_files = [f for f in os.listdir(args.input) if f.lower().endswith(image_extensions)]
+    image_extensions = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
+    image_files = [
+        f for f in os.listdir(args.input) if f.lower().endswith(image_extensions)
+    ]
 
     if not image_files:
         logger.error(f"No images found in {args.input}")
@@ -101,15 +122,33 @@ def main(args: argparse.Namespace) -> None:
 
 
 def main_cli() -> None:
-    parser = argparse.ArgumentParser(description="ONNX FP16 Inference Script for a folder of images.")
-    parser.add_argument('--model', type=str, required=True, help="Path to the half-precision ONNX model file.")
-    parser.add_argument('-i', '--input', type=str, required=True, help="Path to the folder containing input images.")
-    parser.add_argument('-o', '--output', type=str, required=True,
-                        help="Path to the folder where results will be saved.")
+    parser = argparse.ArgumentParser(
+        description="ONNX  Inference Script for a folder of images."
+    )
+    parser.add_argument(
+        "--model",
+        type=str,
+        required=True,
+        help="Path to the half-precision ONNX model file.",
+    )
+    parser.add_argument(
+        "-i",
+        "--input",
+        type=str,
+        required=True,
+        help="Path to the folder containing input images.",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=str,
+        required=True,
+        help="Path to the folder where results will be saved.",
+    )
 
     args = parser.parse_args()
     main(args)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main_cli()

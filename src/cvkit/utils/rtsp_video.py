@@ -1,9 +1,10 @@
 """
-@Project : CVTools 
+@Project : CVKit
 @File : rtsp_video.py
 @Author : Haruka
-@Date : 2026/1/28 09:06 
+@Date : 2026/1/28 09:06
 """
+
 import logging
 import cv2
 import time
@@ -50,19 +51,19 @@ class Video:
     """
 
     def __init__(
-            self,
-            ip: str,
-            port: int = 554,
-            frame_extraction: int = 3,
-            cache_size: int = 5,
-            username: str | None = None,
-            password: str | None = None,
-            manufacturer: str | None = None,
-            channel: int | None = None,
-            subtype: int | None = None,
-            stream_suffix: str | None = None,
-            buffer: deque[np.ndarray] | None = None,
-            logger: logging.Logger | None = None,
+        self,
+        ip: str,
+        port: int = 554,
+        frame_extraction: int = 3,
+        cache_size: int = 5,
+        username: str | None = None,
+        password: str | None = None,
+        manufacturer: str | None = None,
+        channel: int | None = None,
+        subtype: int | None = None,
+        stream_suffix: str | None = None,
+        buffer: deque[np.ndarray] | None = None,
+        logger: logging.Logger | None = None,
     ):
         """
         初始化 Video 对象，配置 RTSP 连接参数。
@@ -93,7 +94,9 @@ class Video:
         elif manufacturer is not None and channel is not None and subtype is not None:
             stream_path = _resolve_stream_path(manufacturer, channel, subtype)
         else:
-            raise ValueError('参数不足：需提供 stream_suffix 或 (manufacturer, channel, subtype)')
+            raise ValueError(
+                "参数不足：需提供 stream_suffix 或 (manufacturer, channel, subtype)"
+            )
 
         # 组合RTSP地址
         if username and password:
@@ -137,7 +140,7 @@ class Video:
 
             while self._running:
                 if not cap.grab():
-                    self.logger.warning(f"流中断 (grab failed)，尝试重连")
+                    self.logger.warning("流中断 (grab failed)，尝试重连")
                     break
 
                 # 每隔 frame_extraction 帧缓存一次
@@ -159,7 +162,9 @@ class Video:
         """启动拉流线程"""
         if not self._running:
             self._running = True
-            self._thread = threading.Thread(target=self._capture_loop, name='rtsp_capture_loop', daemon=True)
+            self._thread = threading.Thread(
+                target=self._capture_loop, name="rtsp_capture_loop", daemon=True
+            )
             self._thread.start()
 
     def stop(self):

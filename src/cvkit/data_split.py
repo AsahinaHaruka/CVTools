@@ -15,20 +15,26 @@ from cvkit.utils.logger import LoggerBuilder
 
 logger = LoggerBuilder().get_logger(name="data_split")
 
-IMAGE_EXTENSIONS = ('.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff')
+IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff")
 
 
-def split_data(source_dir: str, dest_dir: str, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1):
+def split_data(
+    source_dir: str, dest_dir: str, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1
+):
     # Ensure the ratios sum to 1
     assert train_ratio + val_ratio + test_ratio == 1, "Ratios must sum to 1"
 
     # Create destination directories if they don't exist
-    for subset in ['train', 'val', 'test']:
-        os.makedirs(os.path.join(dest_dir, 'images', subset))
-        os.makedirs(os.path.join(dest_dir, 'labels', subset))
+    for subset in ["train", "val", "test"]:
+        os.makedirs(os.path.join(dest_dir, "images", subset))
+        os.makedirs(os.path.join(dest_dir, "labels", subset))
 
     # Get all image files in the source directory
-    image_files = [f for f in os.listdir(os.path.join(source_dir)) if f.lower().endswith(IMAGE_EXTENSIONS)]
+    image_files = [
+        f
+        for f in os.listdir(os.path.join(source_dir))
+        if f.lower().endswith(IMAGE_EXTENSIONS)
+    ]
     random.shuffle(image_files)
 
     total_images = len(image_files)
@@ -42,38 +48,76 @@ def split_data(source_dir: str, dest_dir: str, train_ratio=0.8, val_ratio=0.1, t
     def move_files(file_list, _subset):
         for file_name in tqdm(file_list, desc=f"Processing {_subset} files"):
             # copy image file
-            shutil.copy(os.path.join(source_dir, file_name), os.path.join(dest_dir, 'images', _subset, file_name))
+            shutil.copy(
+                os.path.join(source_dir, file_name),
+                os.path.join(dest_dir, "images", _subset, file_name),
+            )
             # copy corresponding label file
-            label_file_name = os.path.splitext(file_name)[0] + '.txt'
+            label_file_name = os.path.splitext(file_name)[0] + ".txt"
             label_path = os.path.join(source_dir, label_file_name)
 
             if os.path.exists(label_path):
-                shutil.copy(label_path, os.path.join(dest_dir, 'labels', _subset, label_file_name))
+                shutil.copy(
+                    label_path,
+                    os.path.join(dest_dir, "labels", _subset, label_file_name),
+                )
             else:
-                logger.warning(f"⚠️: Label file not found for {file_name}, Label file isn't txt file ? ")
+                logger.warning(
+                    f"⚠️: Label file not found for {file_name}, Label file isn't txt file ? "
+                )
 
-    move_files(train_files, 'train')
-    move_files(val_files, 'val')
-    move_files(test_files, 'test')
+    move_files(train_files, "train")
+    move_files(val_files, "val")
+    move_files(test_files, "test")
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Split dataset into train, val, and test sets.")
-    parser.add_argument('-i', '--input', type=str, required=True,
-                        help='Path to the source directory containing images and labels')
-    parser.add_argument('-o', '--output', type=str, required=True, help='Path to the destination directory')
-    parser.add_argument('--train_ratio', type=float, default=0.8, help='Ratio of training set')
-    parser.add_argument('--val_ratio', type=float, default=0.1, help='Ratio of validation set')
-    parser.add_argument('--test_ratio', type=float, default=0.1, help='Ratio of test set')
+    parser = argparse.ArgumentParser(
+        description="Split dataset into train, val, and test sets."
+    )
+    parser.add_argument(
+        "-i",
+        "--input",
+        type=str,
+        required=True,
+        help="Path to the source directory containing images and labels",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=str,
+        required=True,
+        help="Path to the destination directory",
+    )
+    parser.add_argument(
+        "--train_ratio", type=float, default=0.8, help="Ratio of training set"
+    )
+    parser.add_argument(
+        "--val_ratio", type=float, default=0.1, help="Ratio of validation set"
+    )
+    parser.add_argument(
+        "--test_ratio", type=float, default=0.1, help="Ratio of test set"
+    )
 
     args = parser.parse_args()
 
-    split_data(args.input, args.output, train_ratio=args.train_ratio, val_ratio=args.val_ratio,
-               test_ratio=args.test_ratio)
+    split_data(
+        args.input,
+        args.output,
+        train_ratio=args.train_ratio,
+        val_ratio=args.val_ratio,
+        test_ratio=args.test_ratio,
+    )
     logger.info("Data split completed successfully.")
-    logger.info(f"Train: {len(os.listdir(os.path.join(args.output, 'images', 'train')))} images")
-    logger.info(f"Val: {len(os.listdir(os.path.join(args.output, 'images', 'val')))} images")
-    logger.info(f"Test: {len(os.listdir(os.path.join(args.output, 'images', 'test')))} images")
+    logger.info(
+        f"Train: {len(os.listdir(os.path.join(args.output, 'images', 'train')))} images"
+    )
+    logger.info(
+        f"Val: {len(os.listdir(os.path.join(args.output, 'images', 'val')))} images"
+    )
+    logger.info(
+        f"Test: {len(os.listdir(os.path.join(args.output, 'images', 'test')))} images"
+    )
 
 
 if __name__ == "__main__":

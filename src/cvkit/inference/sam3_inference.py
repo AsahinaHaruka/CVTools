@@ -13,19 +13,21 @@ from .tokenizer import SimpleCLIPBPETokenizer
 
 
 class SAM3Inference:
-    def __init__(self,
-                 model_path: str,
-                 vocab_file: str,
-                 merges_file: str,
-                 enable_trt_profile: bool = False,
-                 stride: int = 14,
-                 min_batch_size: int = 1,
-                 opt_batch_size: int = 1,
-                 max_batch_size: int = 1,
-                 input_image_size: tuple[int, int] = None,
-                 target_long_side: int = 640,
-                 other_size=(32, 32, 32),
-                 execution_provider: tuple[str] = ("trt", "cuda", "CoreML", "cpu")):
+    def __init__(
+        self,
+        model_path: str,
+        vocab_file: str,
+        merges_file: str,
+        enable_trt_profile: bool = False,
+        stride: int = 14,
+        min_batch_size: int = 1,
+        opt_batch_size: int = 1,
+        max_batch_size: int = 1,
+        input_image_size: tuple[int, int] = None,
+        target_long_side: int = 640,
+        other_size=(32, 32, 32),
+        execution_provider: tuple[str] = ("trt", "cuda", "CoreML", "cpu"),
+    ):
         """
         初始化 SAM3 推理会话。
 
@@ -63,35 +65,45 @@ class SAM3Inference:
         Raises:
             FileNotFoundError: 如果 `model_path` 指定的文件不存在。
         """
-        self.model=ONNXInference(model_path=model_path,
-                         stride=stride,
-                         enable_trt_profile=enable_trt_profile,
-                         min_batch_size=min_batch_size,
-                         opt_batch_size=opt_batch_size,
-                         max_batch_size=max_batch_size,
-                         input_image_size=input_image_size,
-                         target_long_side=target_long_side,
-                         other_size=other_size,
-                         execution_provider=execution_provider
-                         )
+        self.model = ONNXInference(
+            model_path=model_path,
+            stride=stride,
+            enable_trt_profile=enable_trt_profile,
+            min_batch_size=min_batch_size,
+            opt_batch_size=opt_batch_size,
+            max_batch_size=max_batch_size,
+            input_image_size=input_image_size,
+            target_long_side=target_long_side,
+            other_size=other_size,
+            execution_provider=execution_provider,
+        )
 
-        self.tokenizer = SimpleCLIPBPETokenizer(vocab_file=vocab_file,
-                                                merges_file=merges_file,
-                                                max_length=32,
-                                                bos_token_id=49406,
-                                                eos_token_id=49407,
-                                                bpe_vocab_size=49152,
-                                                )
+        self.tokenizer = SimpleCLIPBPETokenizer(
+            vocab_file=vocab_file,
+            merges_file=merges_file,
+            max_length=32,
+            bos_token_id=49406,
+            eos_token_id=49407,
+            bpe_vocab_size=49152,
+        )
 
-        self.image_processor = ImageProcessor(target_size=self.model.img_size,
-                                              stride=self.model.stride,
-                                              is_fixed_size=self.model.fix_image,
-                                              norm_type='-1_1',
-                                              fill_value=144,
-                                              dtype=self.model.input_meta[0]['type'])
+        self.image_processor = ImageProcessor(
+            target_size=self.model.img_size,
+            stride=self.model.stride,
+            is_fixed_size=self.model.fix_image,
+            norm_type="-1_1",
+            fill_value=144,
+            dtype=self.model.input_meta[0]["type"],
+        )
 
-    def __call__(self, input_data: dict[str, np.ndarray] | list[np.ndarray] | np.ndarray, prompt: str,
-                 return_boxes: bool = True, return_masks: bool = True, raw: bool = False) -> dict:
+    def __call__(
+        self,
+        input_data: dict[str, np.ndarray] | list[np.ndarray] | np.ndarray,
+        prompt: str,
+        return_boxes: bool = True,
+        return_masks: bool = True,
+        raw: bool = False,
+    ) -> dict:
         """
         执行 SAM3 模型的推理。
 
@@ -128,18 +140,27 @@ class SAM3Inference:
 
         processed_input, transform_params = self.image_processor(input_data)
 
-        outputs = self.model({
-            "pixel_values": processed_input,
-            "input_ids": input_ids,
-            "attention_mask": attention_mask,
-        })
+        outputs = self.model(
+            {
+                "pixel_values": processed_input,
+                "input_ids": input_ids,
+                "attention_mask": attention_mask,
+            }
+        )
 
-        res = {'scores': outputs[2]}
+        res = {"scores": outputs[2]}
         if return_boxes:
-            res['boxes'] = outputs[1] if raw else self.image_processor.restore_boxes(outputs[1],
-                                                                                     transform_params,
-                                                                                     box_format='xyxy')
+            res["boxes"] = (
+                outputs[1]
+                if raw
+                else self.image_processor.restore_boxes(
+                    outputs[1], transform_params, box_format="xyxy"
+                )
+            )
         if return_masks:
-            res['masks'] = outputs[0] if raw else self.image_processor.restore_masks(outputs[0],
-                                                                                     transform_params)
+            res["masks"] = (
+                outputs[0]
+                if raw
+                else self.image_processor.restore_masks(outputs[0], transform_params)
+            )
         return res

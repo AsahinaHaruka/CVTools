@@ -3,7 +3,7 @@ Author: Haruka
 Date: 2026-01-15 15:19:47
 LastEditors: Haruka
 LastEditTime: 2026-01-16 10:19:40
-FilePath: /road/uilt/logger.py
+FilePath: logger.py
 """
 
 import logging
@@ -25,7 +25,7 @@ class ColoredFormatter(logging.Formatter):
     """
 
     # ANSI 颜色代码
-    GREY = "\x1b[38;20m"
+    MAGENTA = "\x1b[35;20m"
     GREEN = "\x1b[32;20m"
     YELLOW = "\x1b[33;20m"
     RED = "\x1b[31;20m"
@@ -34,7 +34,7 @@ class ColoredFormatter(logging.Formatter):
 
     # 针对不同日志级别的颜色映射
     FORMATS = {
-        logging.DEBUG: GREY,
+        logging.DEBUG: MAGENTA,
         logging.INFO: GREEN,
         logging.WARNING: YELLOW,
         logging.ERROR: RED,
@@ -79,20 +79,22 @@ class LoggerBuilder:
     """
 
     DEBUG_FORMAT = "%(asctime)s | %(levelname)-8s | %(processName)s:%(process)d | %(filename)s:%(lineno)d | %(message)s"
-    DEFAULT_FORMAT = "%(asctime)s | %(levelname)-8s | %(processName)s:%(process)d | %(message)s"
+    DEFAULT_FORMAT = (
+        "%(asctime)s | %(levelname)-8s | %(processName)s:%(process)d | %(message)s"
+    )
 
     @staticmethod
     def _create_handlers(
-            log_dir: str,
-            log_filename: str | None,
-            console_output: bool,
-            file_rotation: str,
-            max_bytes: int,
-            backup_count: int,
-            when: str,
-            interval: int,
-            delay: bool,
-            format: str = DEFAULT_FORMAT,
+        log_dir: str,
+        log_filename: str | None,
+        console_output: bool,
+        file_rotation: str,
+        max_bytes: int,
+        backup_count: int,
+        when: str,
+        interval: int,
+        delay: bool,
+        format: str = DEFAULT_FORMAT,
     ) -> list[logging.Handler]:
         """内部方法：创建 Handler 列表"""
         handlers = []
@@ -101,9 +103,7 @@ class LoggerBuilder:
         # 1. 控制台 Handler
         if console_output:
             console_handler = logging.StreamHandler(sys.stdout)
-            console_handler.setFormatter(
-                ColoredFormatter(fmt=format)
-            )
+            console_handler.setFormatter(ColoredFormatter(fmt=format))
             handlers.append(console_handler)
 
         # 2. 文件 Handler
@@ -143,17 +143,17 @@ class LoggerBuilder:
 
     @staticmethod
     def get_logger(
-            name: str = "root",
-            level: int = logging.INFO,
-            log_dir: str = "logs",
-            log_filename: str | None = None,
-            console_output: bool = True,
-            file_rotation: str = "size",  # 选项: 'size', 'time', 'none'
-            max_bytes: int = 10 * 1024 * 1024,  # 10MB
-            backup_count: int = 5,
-            when: str = "midnight",
-            interval: int = 1,
-            delay: bool = False,
+        name: str = "root",
+        level: int = logging.NOTSET,
+        log_dir: str = "logs",
+        log_filename: str | None = None,
+        console_output: bool = True,
+        file_rotation: str = "size",  # 选项: 'size', 'time', 'none'
+        max_bytes: int = 10 * 1024 * 1024,  # 10MB
+        backup_count: int = 5,
+        when: str = "midnight",
+        interval: int = 1,
+        delay: bool = False,
     ) -> logging.Logger:
         """
         获取一个配置好的 `logging.Logger` 实例，用于单进程日志记录。
@@ -163,7 +163,7 @@ class LoggerBuilder:
 
         Args:
             name (str): Logger 的名称。默认为 "root"。
-            level (int): 日志记录的最低级别。例如 `logging.INFO`。默认为 `logging.INFO`。
+            level (int): 日志记录的最低级别。如果为 `logging.NOTSET`，将继承自 Root Logger 的级别。默认为 `logging.NOTSET`。
             log_dir (str): 日志文件存储的目录。默认为 "logs"。
             log_filename (str | None): 日志文件的名称。如果为 `None`，则不输出到文件。默认为 `None`。
             console_output (bool): 是否将日志输出到控制台。默认为 `True`。
@@ -180,10 +180,15 @@ class LoggerBuilder:
         Raises:
             OSError: 如果无法创建日志目录或写入日志文件。
         """
+        root_logger = logging.getLogger()
+
         logger = logging.getLogger(name)
         logger.setLevel(level)
 
-        if level == logging.DEBUG:
+        effective_level = (
+            level if level != logging.NOTSET else root_logger.getEffectiveLevel()
+        )
+        if effective_level == logging.DEBUG:
             format = LoggerBuilder.DEBUG_FORMAT
         else:
             format = LoggerBuilder.DEFAULT_FORMAT
@@ -200,10 +205,13 @@ class LoggerBuilder:
                 when=when,
                 interval=interval,
                 delay=delay,
-                format=format
+                format=format,
             )
             for h in handlers:
                 logger.addHandler(h)
+
+        # 禁用日志向下级/上级传播，防止在FastMCP/uvicorn等已有Root Handler的容器/环境中出现重复日志
+        logger.propagate = False
         return logger
 
 
@@ -218,16 +226,16 @@ class MultiProcessLogManager:
 
     @staticmethod
     def init_main_listener(
-            level: int = logging.INFO,
-            log_dir: str = "logs",
-            log_filename: str = None,
-            console_output: bool = True,
-            file_rotation: str = "size",  # 选项: 'size', 'time', 'none'
-            max_bytes: int = 10 * 1024 * 1024,
-            backup_count: int = 5,
-            when: str = "midnight",
-            interval: int = 1,
-            delay: bool = False,
+        level: int = logging.INFO,
+        log_dir: str = "logs",
+        log_filename: str = None,
+        console_output: bool = True,
+        file_rotation: str = "size",  # 选项: 'size', 'time', 'none'
+        max_bytes: int = 10 * 1024 * 1024,
+        backup_count: int = 5,
+        when: str = "midnight",
+        interval: int = 1,
+        delay: bool = False,
     ) -> tuple[multiprocessing.Queue, QueueListener]:
         """
         【主进程调用】初始化队列监听器。
@@ -283,9 +291,13 @@ class MultiProcessLogManager:
 
         # 检查并清理 Root Logger 的现有 Handler
         if root.handlers:
-            print(f"[LogManager] 警告: 检测到主进程已有 {len(root.handlers)} 个 Handler。")
+            print(
+                f"[LogManager] 警告: 检测到主进程已有 {len(root.handlers)} 个 Handler。"
+            )
             print(f"[LogManager] 现有 Handler 为: {root.handlers}")
-            print("[LogManager] 为防止日志重复或格式冲突，正在清理旧 Handler，完全使用 LogManager 配置...")
+            print(
+                "[LogManager] 为防止日志重复或格式冲突，正在清理旧 Handler，完全使用 LogManager 配置..."
+            )
 
             # 直接清空，而不是复制
             root.handlers = []
@@ -300,7 +312,7 @@ class MultiProcessLogManager:
             when=when,
             interval=interval,
             delay=delay,
-            format=_format
+            format=_format,
         )
 
         # 启动监听器
@@ -314,7 +326,7 @@ class MultiProcessLogManager:
 
     @staticmethod
     def configure_worker(
-            queue: multiprocessing.queues.Queue | None = None, level: int = logging.INFO
+        queue: multiprocessing.queues.Queue | None = None, level: int = logging.INFO
     ) -> None:
         """
         【子进程调用】配置当前进程的日志发送端。

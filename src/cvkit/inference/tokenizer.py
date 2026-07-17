@@ -80,7 +80,6 @@ class SimpleCLIPBPETokenizer:
             do_lower_case (bool, optional): 在分词前是否将文本转换为小写。默认为 True。
         """
 
-
         self.max_length = max_length
         self.bos_token_id = bos_token_id
         self.eos_token_id = eos_token_id
@@ -148,11 +147,7 @@ class SimpleCLIPBPETokenizer:
                     new_word.extend(word[i:j])
                     i = j
 
-                if (
-                    word[i] == first
-                    and i < len(word) - 1
-                    and word[i + 1] == second
-                ):
+                if word[i] == first and i < len(word) - 1 and word[i + 1] == second:
                     new_word.append(first + second)
                     i += 2
                 else:
@@ -179,9 +174,7 @@ class SimpleCLIPBPETokenizer:
 
         for token in self.pat.findall(text):
             # bytes -> unicode string
-            token_encoded = "".join(
-                self.byte_encoder[b] for b in token.encode("utf-8")
-            )
+            token_encoded = "".join(self.byte_encoder[b] for b in token.encode("utf-8"))
             bpe_out = self._bpe(token_encoded)
             bpe_tokens.extend(bpe_out.split(" "))
 

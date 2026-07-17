@@ -4,6 +4,7 @@
 @Author:   Haruka
 @Date:     2026/1/23 16:06
 """
+
 import argparse
 import os
 import cv2
@@ -13,11 +14,13 @@ from cvkit.inference.yolo_inference import YoloSegInference
 
 
 from cvkit.utils.logger import LoggerBuilder
+
 logger = LoggerBuilder().get_logger(name="yolo_seg")
 
 
-def draw_segmentation(image: np.ndarray, boxes: np.ndarray, masks: np.ndarray,
-                      conf_threshold: float = 0.5) -> np.ndarray:
+def draw_segmentation(
+    image: np.ndarray, boxes: np.ndarray, masks: np.ndarray, conf_threshold: float = 0.5
+) -> np.ndarray:
     """
     在图像上绘制分割和检测结果 (单张图片)。
     修改点：使用了预设的高对比度颜色列表，代替随机颜色。
@@ -48,7 +51,6 @@ def draw_segmentation(image: np.ndarray, boxes: np.ndarray, masks: np.ndarray,
         (0, 255, 255),  # 3: Yellow
     ]
 
-
     for i, box in enumerate(boxes):
         x1, y1, x2, y2, score, class_id = box
 
@@ -78,27 +80,41 @@ def draw_segmentation(image: np.ndarray, boxes: np.ndarray, masks: np.ndarray,
         mask_indices = mask == 1
         if np.any(mask_indices):
             vis_img[mask_indices] = cv2.addWeighted(
-                vis_img[mask_indices], 0.5,
-                colored_mask[mask_indices], 0.5,
-                0
+                vis_img[mask_indices], 0.5, colored_mask[mask_indices], 0.5, 0
             )
 
-        #绘制边界框 (Bounding Box)
+        # 绘制边界框 (Bounding Box)
         cv2.rectangle(vis_img, (x1, y1), (x2, y2), color, 2)
 
         # 绘制标签 (Label)
         label_text = f"Class {class_id}: {score:.2f}"
-        (label_width, label_height), baseline = cv2.getTextSize(label_text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+        (label_width, label_height), baseline = cv2.getTextSize(
+            label_text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1
+        )
 
         # 标签背景色与框颜色一致
-        cv2.rectangle(vis_img, (x1, y1 - label_height - baseline), (x1 + label_width, y1), color, -1)
+        cv2.rectangle(
+            vis_img,
+            (x1, y1 - label_height - baseline),
+            (x1 + label_width, y1),
+            color,
+            -1,
+        )
 
         text_color = (255, 255, 255)
         # 如果背景色太亮（例如青色或黄色），将文字改为黑色，方便阅读
         if sum(color) > 500:
             text_color = (0, 0, 0)
 
-        cv2.putText(vis_img, label_text, (x1, y1 - baseline), cv2.FONT_HERSHEY_SIMPLEX, 0.5, text_color, 1)
+        cv2.putText(
+            vis_img,
+            label_text,
+            (x1, y1 - baseline),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            text_color,
+            1,
+        )
 
     return vis_img
 
@@ -112,19 +128,22 @@ def main(args: argparse.Namespace) -> None:
     """
     # 初始化推理引擎
     logger.info(f"Initializing Segmentation engine with model: {args.model}...")
-    inference_engine = YoloSegInference(args.model, execution_provider=('CoreML', 'CPUExecutionProvider'))
-
+    inference_engine = YoloSegInference(
+        args.model, execution_provider=("CoreML", "CPUExecutionProvider")
+    )
 
     # 准备输入输出目录
     os.makedirs(args.output, exist_ok=True)
-    image_extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.webp')
+    image_extensions = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
 
     # 检查输入是文件还是文件夹
     if os.path.isfile(args.input):
         image_files = [os.path.basename(args.input)]
         input_dir = os.path.dirname(args.input)
     else:
-        image_files = [f for f in os.listdir(args.input) if f.lower().endswith(image_extensions)]
+        image_files = [
+            f for f in os.listdir(args.input) if f.lower().endswith(image_extensions)
+        ]
         input_dir = args.input
 
     if not image_files:
@@ -144,11 +163,13 @@ def main(args: argparse.Namespace) -> None:
         res = inference_engine([image], raw=False, return_boxes=True, return_masks=True)
 
         # 获取单张图片的结果 (batch index 0)
-        boxes = res['box'][0]   # shape: (N, 6)
-        masks = res['masks'][0] # shape: (N, H, W)
+        boxes = res["box"][0]  # shape: (N, 6)
+        masks = res["masks"][0]  # shape: (N, H, W)
 
         # 在图片上绘制结果
-        annotated_image = draw_segmentation(image, boxes, masks, conf_threshold=args.conf)
+        annotated_image = draw_segmentation(
+            image, boxes, masks, conf_threshold=args.conf
+        )
 
         # 保存结果图片
         output_path = os.path.join(args.output, image_file)
@@ -159,14 +180,36 @@ def main(args: argparse.Namespace) -> None:
 
 def main_cli() -> None:
     parser = argparse.ArgumentParser(description="YOLO Segmentation Inference Script.")
-    parser.add_argument('--model', type=str, required=True, help="Path to the ONNX segmentation model file.")
-    parser.add_argument('-i', '--input', type=str, required=True, help="Path to the image file or folder containing input images.")
-    parser.add_argument('-o', '--output', type=str, required=True, help="Path to the folder where results will be saved.")
-    parser.add_argument('--conf', type=float, default=0.5, help="Confidence threshold for visualization.")
+    parser.add_argument(
+        "--model",
+        type=str,
+        required=True,
+        help="Path to the ONNX segmentation model file.",
+    )
+    parser.add_argument(
+        "-i",
+        "--input",
+        type=str,
+        required=True,
+        help="Path to the image file or folder containing input images.",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=str,
+        required=True,
+        help="Path to the folder where results will be saved.",
+    )
+    parser.add_argument(
+        "--conf",
+        type=float,
+        default=0.5,
+        help="Confidence threshold for visualization.",
+    )
 
     args = parser.parse_args()
     main(args)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main_cli()

@@ -4,6 +4,7 @@
 @Author : Haruka
 @Date : 2026/1/9 13:41
 """
+
 import cv2
 import numpy as np
 from typing import overload
@@ -52,33 +53,41 @@ def imagenet(input_tensor: np.ndarray) -> np.ndarray:
     # 确保 mean 和 std 的形状与输入张量兼容，以便进行广播
     # 如果输入是 (N, C, H, W)，则 mean/std 形状为 (1, C, 1, 1)
     # 如果输入是 (C, H, W)，则 mean/std 形状为 (C, 1, 1)
-    num_channels = input_tensor.shape[1] if input_tensor.ndim == 4 else input_tensor.shape[0]
+    num_channels = (
+        input_tensor.shape[1] if input_tensor.ndim == 4 else input_tensor.shape[0]
+    )
 
     mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
     std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
     # 调整形状以匹配输入张量的维度，通常是 (1, C, 1, 1) 或 (C, 1, 1)
-    mean = mean.reshape(1, num_channels, 1, 1) if input_tensor.ndim == 4 else mean.reshape(num_channels, 1, 1)
-    std = std.reshape(1, num_channels, 1, 1) if input_tensor.ndim == 4 else std.reshape(num_channels, 1, 1)
+    mean = (
+        mean.reshape(1, num_channels, 1, 1)
+        if input_tensor.ndim == 4
+        else mean.reshape(num_channels, 1, 1)
+    )
+    std = (
+        std.reshape(1, num_channels, 1, 1)
+        if input_tensor.ndim == 4
+        else std.reshape(num_channels, 1, 1)
+    )
     return (input_tensor - mean) / std
 
 
-NORM_CALL = {
-    '0_1': zero2one,
-    '-1_1': minus_one2one,
-    'imagenet': imagenet
-}
+NORM_CALL = {"0_1": zero2one, "-1_1": minus_one2one, "imagenet": imagenet}
 
 
 class ImageProcessor:
-    def __init__(self,
-                 target_size: int | tuple[int, int] = 640,
-                 stride: int = 32,
-                 is_fixed_size: bool = False,
-                 norm_type: str = "0_1",
-                 fill_value: int = 114,
-                 dtype: np.dtype = np.float32,
-                 uniform_transform: bool = False):
+    def __init__(
+        self,
+        target_size: int | tuple[int, int] = 640,
+        stride: int = 32,
+        is_fixed_size: bool = False,
+        norm_type: str = "0_1",
+        fill_value: int = 114,
+        dtype: np.dtype = np.float32,
+        uniform_transform: bool = False,
+    ):
         """
         图像预处理与后处理工具类。
 
@@ -174,19 +183,28 @@ class ImageProcessor:
         # 针对不同通道数的通用处理
         if c == 3:
             transformed_img = cv2.copyMakeBorder(
-                transformed_img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=(self.fill_value,) * 3
+                transformed_img,
+                top,
+                bottom,
+                left,
+                right,
+                cv2.BORDER_CONSTANT,
+                value=(self.fill_value,) * 3,
             )
         else:  # multispectral
-            pad_img = np.full((h + top + bottom, w + left + right, c), fill_value=self.fill_value,
-                              dtype=transformed_img.dtype)
-            pad_img[top: top + h, left: left + w] = transformed_img
+            pad_img = np.full(
+                (h + top + bottom, w + left + right, c),
+                fill_value=self.fill_value,
+                dtype=transformed_img.dtype,
+            )
+            pad_img[top : top + h, left : left + w] = transformed_img
             transformed_img = pad_img
 
         transform_params = {
-            'orig_shape': shape,
-            'scale': r,
-            'padding': (left, top),
-            'transformed_shape': transformed_img.shape[:2]
+            "orig_shape": shape,
+            "scale": r,
+            "padding": (left, top),
+            "transformed_shape": transformed_img.shape[:2],
         }
         return transformed_img, transform_params
 
@@ -228,7 +246,9 @@ class ImageProcessor:
             stacked_img = images.reshape(batch_size * h_orig, w_orig, c)
             # Resize 到 (new_w, B * new_h)
             # 注意: cv2.resize 接收 (Width, Height)
-            resized_stacked = cv2.resize(stacked_img, (new_w, batch_size * new_h), interpolation=cv2.INTER_LINEAR)
+            resized_stacked = cv2.resize(
+                stacked_img, (new_w, batch_size * new_h), interpolation=cv2.INTER_LINEAR
+            )
             # 还原维度 (B, new_h, new_w, C)
             resized_batch = resized_stacked.reshape(batch_size, new_h, new_w, c)
         else:
@@ -239,24 +259,27 @@ class ImageProcessor:
         final_w = new_w + left + right
 
         # 预分配大数组
-        padded_batch = np.full((batch_size, final_h, final_w, c),
-                               self.fill_value, dtype=images.dtype)
+        padded_batch = np.full(
+            (batch_size, final_h, final_w, c), self.fill_value, dtype=images.dtype
+        )
 
         # 一次性填入中间区域
-        padded_batch[:, top:top + new_h, left:left + new_w, :] = resized_batch
+        padded_batch[:, top : top + new_h, left : left + new_w, :] = resized_batch
 
         # 4. 构造参数列表 (所有图片参数一致)
         common_params = {
-            'orig_shape': (h_orig, w_orig),
-            'scale': r,
-            'padding': (left, top),
-            'transformed_shape': (final_h, final_w)
+            "orig_shape": (h_orig, w_orig),
+            "scale": r,
+            "padding": (left, top),
+            "transformed_shape": (final_h, final_w),
         }
         transform_params = [common_params] * batch_size
 
         return padded_batch, transform_params
 
-    def __call__(self, input_data: list[np.ndarray] | np.ndarray) -> tuple[np.ndarray, list[dict]]:
+    def __call__(
+        self, input_data: list[np.ndarray] | np.ndarray
+    ) -> tuple[np.ndarray, list[dict]]:
         """
         对输入图像数据进行预处理，包括 Letterbox 缩放、通道转换、维度重排和归一化。
 
@@ -286,7 +309,9 @@ class ImageProcessor:
                 # 如果是 list，必须 stack 起来。
                 # 如果图片尺寸不一致，这里 np.stack 会直接报错，符合预期 (Fail Fast)
                 if len(input_data) == 0:
-                    return np.empty((0, 3, self.target_h, self.target_w), dtype=self.dtype), []
+                    return np.empty(
+                        (0, 3, self.target_h, self.target_w), dtype=self.dtype
+                    ), []
                 input_tensor = np.stack(input_data)
             else:
                 input_tensor = input_data
@@ -325,9 +350,9 @@ class ImageProcessor:
         return transformed_tensor.astype(self.dtype), transform_params
 
     @staticmethod
-    def process_box_coordinates(boxes: np.ndarray,
-                                input_shape: tuple[int, int],
-                                box_format: str) -> np.ndarray:
+    def process_box_coordinates(
+        boxes: np.ndarray, input_shape: tuple[int, int], box_format: str
+    ) -> np.ndarray:
         """
         处理 Box 坐标：
         1. 自动检测并执行反归一化 (0-1 -> input_shape)。
@@ -357,7 +382,7 @@ class ImageProcessor:
             res[..., 3] *= h
 
         # 格式转换 cxcywh -> xyxy
-        if box_format == 'cxcywh':
+        if box_format == "cxcywh":
             cx, cy, w, h = res[..., 0], res[..., 1], res[..., 2], res[..., 3]
             x1 = cx - 0.5 * w
             y1 = cy - 0.5 * h
@@ -369,22 +394,24 @@ class ImageProcessor:
 
     @overload
     @staticmethod
-    def restore_boxes(detections: np.ndarray,
-                      transform_params: list[dict],
-                      box_format: str = 'xyxy') -> np.ndarray:
-        ...
+    def restore_boxes(
+        detections: np.ndarray, transform_params: list[dict], box_format: str = "xyxy"
+    ) -> np.ndarray: ...
 
     @overload
     @staticmethod
-    def restore_boxes(detections: list[np.ndarray],
-                      transform_params: list[dict],
-                      box_format: str = 'xyxy') -> list[np.ndarray]:
-        ...
+    def restore_boxes(
+        detections: list[np.ndarray],
+        transform_params: list[dict],
+        box_format: str = "xyxy",
+    ) -> list[np.ndarray]: ...
 
     @staticmethod
-    def restore_boxes(detections: np.ndarray | list[np.ndarray],
-                      transform_params: list[dict],
-                      box_format: str = 'xyxy') -> np.ndarray | list[np.ndarray]:
+    def restore_boxes(
+        detections: np.ndarray | list[np.ndarray],
+        transform_params: list[dict],
+        box_format: str = "xyxy",
+    ) -> np.ndarray | list[np.ndarray]:
         """
         将检测框坐标从 Letterbox 处理后的图像坐标系还原到原始图像坐标系。
 
@@ -400,14 +427,18 @@ class ImageProcessor:
         """
 
         if isinstance(detections, list):
-            return ImageProcessor._restore_box_sequential(detections, transform_params, box_format)
+            return ImageProcessor._restore_box_sequential(
+                detections, transform_params, box_format
+            )
         else:
-            return ImageProcessor._restore_box_uniform(detections, transform_params, box_format)
+            return ImageProcessor._restore_box_uniform(
+                detections, transform_params, box_format
+            )
 
     @staticmethod
-    def _restore_box_sequential(detections: list[np.ndarray],
-                                transform_params: list[dict],
-                                box_format: str) -> list[np.ndarray]:
+    def _restore_box_sequential(
+        detections: list[np.ndarray], transform_params: list[dict], box_format: str
+    ) -> list[np.ndarray]:
         """
         还原检测框坐标（顺序处理模式）。
 
@@ -431,15 +462,17 @@ class ImageProcessor:
             params = transform_params[i]
 
             # 反归一化
-            input_shape = params.get('transformed_shape')
+            input_shape = params.get("transformed_shape")
             if input_shape:
-                res = ImageProcessor.process_box_coordinates(det, input_shape, box_format)
+                res = ImageProcessor.process_box_coordinates(
+                    det, input_shape, box_format
+                )
             else:
                 res = det.copy()
 
             # 还原 Letterbox
-            scale = params['scale']
-            pad_w, pad_h = params['padding']
+            scale = params["scale"]
+            pad_w, pad_h = params["padding"]
 
             res[:, 0] -= pad_w
             res[:, 2] -= pad_w
@@ -452,9 +485,9 @@ class ImageProcessor:
         return results
 
     @staticmethod
-    def _restore_box_uniform(detections: np.ndarray,
-                             transform_params: list[dict],
-                             box_format: str) -> np.ndarray:
+    def _restore_box_uniform(
+        detections: np.ndarray, transform_params: list[dict], box_format: str
+    ) -> np.ndarray:
         """
         还原检测框坐标（批处理模式）。
 
@@ -469,19 +502,23 @@ class ImageProcessor:
             np.ndarray: 还原后的检测结果数组。
         """
         # 反归一化
-        input_shape = transform_params[0].get('transformed_shape')
+        input_shape = transform_params[0].get("transformed_shape")
         if input_shape:
-            result = ImageProcessor.process_box_coordinates(detections, input_shape, box_format)
+            result = ImageProcessor.process_box_coordinates(
+                detections, input_shape, box_format
+            )
         else:
             result = detections.copy()
 
         # 还原 Letterbox
         # 提取 scale 和 padding 为 numpy 数组以利用广播机制
         # Shape: (B, 1, 1)
-        scales = np.array([p['scale'] for p in transform_params], dtype=np.float32)[:, None, None]
+        scales = np.array([p["scale"] for p in transform_params], dtype=np.float32)[
+            :, None, None
+        ]
 
         # Shape: (B, 2)
-        pads = np.array([p['padding'] for p in transform_params], dtype=np.float32)
+        pads = np.array([p["padding"] for p in transform_params], dtype=np.float32)
 
         # Shape: (B, 1) -> Broadcasts to (B, Num_Queries)
         pad_left = pads[:, 0][:, None]
@@ -499,12 +536,14 @@ class ImageProcessor:
         return result
 
     @staticmethod
-    def restore_masks(masks: np.ndarray | list[np.ndarray],
-                      transform_params: list[dict],
-                      boxes: np.ndarray | list[np.ndarray] | None = None,
-                      box_format: str = 'xyxy',
-                      mask_threshold: float = 0.0,
-                      uniform_transform: bool = False) -> list[np.ndarray]:
+    def restore_masks(
+        masks: np.ndarray | list[np.ndarray],
+        transform_params: list[dict],
+        boxes: np.ndarray | list[np.ndarray] | None = None,
+        box_format: str = "xyxy",
+        mask_threshold: float = 0.0,
+        uniform_transform: bool = False,
+    ) -> list[np.ndarray]:
         """
         将分割掩码从推理尺寸还原到原始图像尺寸。
 
@@ -554,7 +593,7 @@ class ImageProcessor:
                 params=transform_params[0],
                 boxes=boxes,
                 box_format=box_format,
-                mask_threshold=mask_threshold
+                mask_threshold=mask_threshold,
             )
         else:
             # 循环处理每一张图片
@@ -563,15 +602,17 @@ class ImageProcessor:
                 transform_params=transform_params,
                 boxes=boxes,
                 box_format=box_format,
-                mask_threshold=mask_threshold
+                mask_threshold=mask_threshold,
             )
 
     @staticmethod
-    def _restore_masks_uniform(masks: np.ndarray,
-                               params: dict,
-                               boxes: np.ndarray | None,
-                               box_format: str,
-                               mask_threshold: float) -> list[np.ndarray]:
+    def _restore_masks_uniform(
+        masks: np.ndarray,
+        params: dict,
+        boxes: np.ndarray | None,
+        box_format: str,
+        mask_threshold: float,
+    ) -> list[np.ndarray]:
         """
         还原分割掩码（统一处理模式）。
 
@@ -588,9 +629,9 @@ class ImageProcessor:
             list[np.ndarray]: 还原后的掩码列表。
         """
 
-        orig_h, orig_w = params['orig_shape']
-        input_h, input_w = params['transformed_shape']
-        pad_w, pad_h = params['padding']
+        orig_h, orig_w = params["orig_shape"]
+        input_h, input_w = params["transformed_shape"]
+        pad_w, pad_h = params["padding"]
 
         batch_size, num_queries, mask_h, mask_w = masks.shape
         scale_y = mask_h / input_h
@@ -598,7 +639,9 @@ class ImageProcessor:
 
         #  Crop to Box (去除框外噪声)
         if boxes is not None and isinstance(boxes, np.ndarray):
-            processed_boxes = ImageProcessor.process_box_coordinates(boxes, (input_h, input_w), box_format)
+            processed_boxes = ImageProcessor.process_box_coordinates(
+                boxes, (input_h, input_w), box_format
+            )
             # 扩展维度用于广播
             b_x1 = (processed_boxes[..., 0] * scale_x)[..., None, None]
             b_y1 = (processed_boxes[..., 1] * scale_y)[..., None, None]
@@ -609,7 +652,12 @@ class ImageProcessor:
             x_range = np.arange(mask_w, dtype=np.float32)[None, None, None, :]
             y_range = np.arange(mask_h, dtype=np.float32)[None, None, :, None]
 
-            crop_mask = (x_range >= b_x1) & (x_range < b_x2) & (y_range >= b_y1) & (y_range < b_y2)
+            crop_mask = (
+                (x_range >= b_x1)
+                & (x_range < b_x2)
+                & (y_range >= b_y1)
+                & (y_range < b_y2)
+            )
             masks = masks * crop_mask
 
         # 计算 Letterbox Padding 的裁剪区域
@@ -627,12 +675,17 @@ class ImageProcessor:
         cropped_masks = masks[..., y1:y2, x1:x2]
 
         if cropped_masks.size == 0:
-            return [np.zeros((num_queries, orig_h, orig_w), dtype=np.uint8) for _ in range(batch_size)]
+            return [
+                np.zeros((num_queries, orig_h, orig_w), dtype=np.uint8)
+                for _ in range(batch_size)
+            ]
 
         # 筛选有效 Mask 并 Resize
         # 预分配最终结果容器
         total_masks_count = batch_size * num_queries
-        final_output_flat = np.zeros((total_masks_count, orig_h, orig_w), dtype=np.uint8)
+        final_output_flat = np.zeros(
+            (total_masks_count, orig_h, orig_w), dtype=np.uint8
+        )
 
         mask_max_values = cropped_masks.max(axis=(-2, -1))
         valid_indices = mask_max_values > mask_threshold
@@ -640,7 +693,6 @@ class ImageProcessor:
 
         num_valid = valid_crops.shape[0]
         if num_valid > 0:
-
             # (valid_crops > mask_threshold) * 255 -> Resize -> Threshold
             mask_binary_valid = (valid_crops > mask_threshold).astype(np.uint8) * 255
             flat_indices_map = np.flatnonzero(valid_indices.reshape(-1))
@@ -648,33 +700,41 @@ class ImageProcessor:
             chunk_size = 16
             for i in range(0, num_valid, chunk_size):
                 end = min(i + chunk_size, num_valid)
-                chunk = mask_binary_valid[i: end]  # (C, H, W)
+                chunk = mask_binary_valid[i:end]  # (C, H, W)
 
                 # Transpose to (H, W, C) for OpenCV
                 to_resize = chunk.transpose(1, 2, 0)
 
                 # Resize
-                resized_chunk = cv2.resize(to_resize, (orig_w, orig_h), interpolation=cv2.INTER_LINEAR)
+                resized_chunk = cv2.resize(
+                    to_resize, (orig_w, orig_h), interpolation=cv2.INTER_LINEAR
+                )
 
                 # 修正维度 (当 C=1 时 cv2 会去掉通道维)
                 if resized_chunk.ndim == 2:
                     resized_chunk = resized_chunk[..., None]
 
                 # 再次二值化消除插值模糊
-                _, resized_chunk_bin = cv2.threshold(resized_chunk, 127, 255, cv2.THRESH_BINARY)
+                _, resized_chunk_bin = cv2.threshold(
+                    resized_chunk, 127, 255, cv2.THRESH_BINARY
+                )
 
                 # 填回 flat 数组 (需转回 C, H, W)
-                current_indices = flat_indices_map[i: end]
-                final_output_flat[current_indices] = resized_chunk_bin.transpose(2, 0, 1)
+                current_indices = flat_indices_map[i:end]
+                final_output_flat[current_indices] = resized_chunk_bin.transpose(
+                    2, 0, 1
+                )
 
         return list(final_output_flat.reshape(batch_size, num_queries, orig_h, orig_w))
 
     @staticmethod
-    def _restore_masks_sequential(masks: np.ndarray | list[np.ndarray],
-                                  transform_params: list[dict],
-                                  boxes: np.ndarray | list[np.ndarray] | None,
-                                  box_format: str,
-                                  mask_threshold: float) -> list[np.ndarray]:
+    def _restore_masks_sequential(
+        masks: np.ndarray | list[np.ndarray],
+        transform_params: list[dict],
+        boxes: np.ndarray | list[np.ndarray] | None,
+        box_format: str,
+        mask_threshold: float,
+    ) -> list[np.ndarray]:
         """
         还原分割掩码（顺序处理模式）。
 
@@ -695,9 +755,9 @@ class ImageProcessor:
         # 遍历 Batch
         for i, mask_tensor in enumerate(masks):
             params = transform_params[i]
-            input_h, input_w = params['transformed_shape']
-            orig_h, orig_w = params['orig_shape']
-            pad_w, pad_h = params['padding']
+            input_h, input_w = params["transformed_shape"]
+            orig_h, orig_w = params["orig_shape"]
+            pad_w, pad_h = params["padding"]
 
             # mask_tensor 可能是 (N, H, W) 或 (0, H, W)
             # 如果是空数组 (没有检测到目标)，直接返回全黑掩码
@@ -716,7 +776,9 @@ class ImageProcessor:
                 curr_box = boxes[i]
 
                 if curr_box is not None and len(curr_box) > 0:
-                    processed_box = ImageProcessor.process_box_coordinates(curr_box, (input_h, input_w), box_format)
+                    processed_box = ImageProcessor.process_box_coordinates(
+                        curr_box, (input_h, input_w), box_format
+                    )
                     b_x1 = (processed_box[:, 0] * scale_x)[:, None, None]
                     b_y1 = (processed_box[:, 1] * scale_y)[:, None, None]
                     b_x2 = (processed_box[:, 2] * scale_x)[:, None, None]
@@ -725,7 +787,12 @@ class ImageProcessor:
                     x_range = np.arange(mask_w, dtype=np.float32)[None, None, :]
                     y_range = np.arange(mask_h, dtype=np.float32)[None, :, None]
 
-                    box_mask = (x_range >= b_x1) & (x_range < b_x2) & (y_range >= b_y1) & (y_range < b_y2)
+                    box_mask = (
+                        (x_range >= b_x1)
+                        & (x_range < b_x2)
+                        & (y_range >= b_y1)
+                        & (y_range < b_y2)
+                    )
                     mask_tensor = mask_tensor * box_mask
 
             #  计算 Letterbox Padding 并 Crop
@@ -743,7 +810,9 @@ class ImageProcessor:
 
             #  Resize
             # 预分配结果：注意这里保持 mask_tensor.shape[0]，即 N
-            curr_img_masks = np.zeros((mask_tensor.shape[0], orig_h, orig_w), dtype=np.uint8)
+            curr_img_masks = np.zeros(
+                (mask_tensor.shape[0], orig_h, orig_w), dtype=np.uint8
+            )
 
             # 只有当裁剪区域有效时才处理
             if cropped_masks.shape[1] > 0 and cropped_masks.shape[2] > 0:
@@ -753,15 +822,23 @@ class ImageProcessor:
                     valid_crops = cropped_masks[valid_idx]  # (Valid_N, H, W)
 
                     # 转为 (H, W, Valid_N) 进行 resize
-                    valid_crops_trans = valid_crops.transpose(1, 2, 0).astype(np.float32)
+                    valid_crops_trans = valid_crops.transpose(1, 2, 0).astype(
+                        np.float32
+                    )
 
-                    restored_trans = cv2.resize(valid_crops_trans, (orig_w, orig_h), interpolation=cv2.INTER_LINEAR)
+                    restored_trans = cv2.resize(
+                        valid_crops_trans,
+                        (orig_w, orig_h),
+                        interpolation=cv2.INTER_LINEAR,
+                    )
 
                     # cv2.resize 在通道为1时会降维，需修正
                     if restored_trans.ndim == 2:
                         restored_trans = restored_trans[..., None]
 
-                    restored_valid = (restored_trans > mask_threshold).astype(np.uint8) * 255
+                    restored_valid = (restored_trans > mask_threshold).astype(
+                        np.uint8
+                    ) * 255
 
                     # 填回容器: (Valid_N, H, W)
                     curr_img_masks[valid_idx] = restored_valid.transpose(2, 0, 1)

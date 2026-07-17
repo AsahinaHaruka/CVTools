@@ -4,6 +4,7 @@
 @Author:   Haruka
 @Date:     2025/10/7 08:29
 """
+
 import argparse
 import random
 import shutil
@@ -13,13 +14,22 @@ from cvkit.utils.logger import LoggerBuilder
 
 logger = LoggerBuilder().get_logger(name="data_split")
 
-IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.bmp'}
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp"}
 
 
 def _get_image_count(src_dir: Path) -> int:
     """计算文件夹内图片数量"""
-    return len([f for f in src_dir.iterdir() if
-                (f.is_file() and f.suffix.lower() in IMAGE_EXTENSIONS and not f.name.startswith('.'))])
+    return len(
+        [
+            f
+            for f in src_dir.iterdir()
+            if (
+                f.is_file()
+                and f.suffix.lower() in IMAGE_EXTENSIONS
+                and not f.name.startswith(".")
+            )
+        ]
+    )
 
 
 def _select_random_files(src_dir: Path, dst_dir: Path, num_files: int):
@@ -27,8 +37,15 @@ def _select_random_files(src_dir: Path, dst_dir: Path, num_files: int):
     具体执行随机选择和复制的函数
     """
     # 获取所有文件的列表
-    files = [f for f in src_dir.iterdir() if
-             (f.is_file() and f.suffix.lower() in IMAGE_EXTENSIONS and not f.name.startswith('.'))]
+    files = [
+        f
+        for f in src_dir.iterdir()
+        if (
+            f.is_file()
+            and f.suffix.lower() in IMAGE_EXTENSIONS
+            and not f.name.startswith(".")
+        )
+    ]
 
     if len(files) == 0:
         return
@@ -38,7 +55,9 @@ def _select_random_files(src_dir: Path, dst_dir: Path, num_files: int):
         return
 
     if len(files) < num_files:
-        logger.warning(f"⚠️警告：源文件夹 '{src_dir}' 中只有 {len(files)} 个文件，不足 {num_files} 个,将全部复制。")
+        logger.warning(
+            f"⚠️警告：源文件夹 '{src_dir}' 中只有 {len(files)} 个文件，不足 {num_files} 个,将全部复制。"
+        )
         num_files = len(files)
 
     # 随机选择文件
@@ -51,7 +70,9 @@ def _select_random_files(src_dir: Path, dst_dir: Path, num_files: int):
         shutil.copy(file_path, dst_dir)
 
 
-def sample_files_from_directories(src_dir: Path, dst_dir: Path, num_files: int, mode: str):
+def sample_files_from_directories(
+    src_dir: Path, dst_dir: Path, num_files: int, mode: str
+):
     """
     主逻辑控制函数
     :param mode: 'fixed' (每个文件夹n张) 或 'proportional' (总共n张，按比例分配)
@@ -72,7 +93,7 @@ def sample_files_from_directories(src_dir: Path, dst_dir: Path, num_files: int, 
     # ==========================
     # 模式 A: 按比例抽取总量
     # ==========================
-    if mode == 'proportional':
+    if mode == "proportional":
         logger.info(f"🔵 模式[proportional]：按比例抽取，总目标数量：{num_files}")
 
         # 1. 统计每个文件夹的图片数量
@@ -112,7 +133,9 @@ def sample_files_from_directories(src_dir: Path, dst_dir: Path, num_files: int, 
         remainder = num_files - current_allocated_sum
         if remainder > 0:
             # 找出还有剩余图片没被抽完的文件夹
-            available_dirs = [d for d in dir_counts.keys() if allocations[d] < dir_counts[d]]
+            available_dirs = [
+                d for d in dir_counts.keys() if allocations[d] < dir_counts[d]
+            ]
             while remainder > 0 and available_dirs:
                 lucky_dir = random.choice(available_dirs)
                 if allocations[lucky_dir] < dir_counts[lucky_dir]:
@@ -124,13 +147,15 @@ def sample_files_from_directories(src_dir: Path, dst_dir: Path, num_files: int, 
         # 4. 执行复制
         for d, alloc_num in allocations.items():
             if alloc_num > 0:
-                logger.info(f"-> 文件夹 '{d.name}': 总数 {dir_counts[d]}, 抽取 {alloc_num}")
+                logger.info(
+                    f"-> 文件夹 '{d.name}': 总数 {dir_counts[d]}, 抽取 {alloc_num}"
+                )
                 _select_random_files(d, dst_dir, alloc_num)
 
     # ==========================
     # 模式 B: 每个文件夹固定数量 (默认)
     # ==========================
-    elif mode == 'fixed':
+    elif mode == "fixed":
         logger.info(f"🔵 模式[fixed]：每个文件夹固定抽取 {num_files} 张")
         for subdir in target_dirs:
             if _get_image_count(subdir) > 0:
@@ -147,21 +172,25 @@ def sample_files_from_directories(src_dir: Path, dst_dir: Path, num_files: int, 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="随机抽取图片工具。")
-    parser.add_argument('-i', '--input', type=str, required=True, help="源目录路径。")
-    parser.add_argument('-o', '--output', type=str, required=True, help="目标目录路径。")
-    parser.add_argument('-n', '--num', type=int, required=True, help="抽取数量。")
+    parser.add_argument("-i", "--input", type=str, required=True, help="源目录路径。")
+    parser.add_argument(
+        "-o", "--output", type=str, required=True, help="目标目录路径。"
+    )
+    parser.add_argument("-n", "--num", type=int, required=True, help="抽取数量。")
 
     # 修改：使用 --model 指定模式，默认为 fixed
-    parser.add_argument('--model', type=str, default='fixed', choices=['fixed', 'proportional'],
-                        help="抽取模式: 'fixed' (默认, 每个文件夹抽n张) 或 'proportional' (总共抽n张，按比例分配)。")
+    parser.add_argument(
+        "--model",
+        type=str,
+        default="fixed",
+        choices=["fixed", "proportional"],
+        help="抽取模式: 'fixed' (默认, 每个文件夹抽n张) 或 'proportional' (总共抽n张，按比例分配)。",
+    )
 
     args = parser.parse_args()
 
     sample_files_from_directories(
-        Path(args.input),
-        Path(args.output),
-        args.num,
-        args.model
+        Path(args.input), Path(args.output), args.num, args.model
     )
 
 
