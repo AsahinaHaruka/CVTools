@@ -17,6 +17,7 @@ from logging.handlers import (
     RotatingFileHandler,
     TimedRotatingFileHandler,
 )
+from typing import ClassVar
 
 
 class ColoredFormatter(logging.Formatter):
@@ -33,7 +34,7 @@ class ColoredFormatter(logging.Formatter):
     RESET = "\x1b[0m"
 
     # 针对不同日志级别的颜色映射
-    FORMATS = {  # noqa: RUF012
+    FORMATS:ClassVar[dict] = {
         logging.DEBUG: MAGENTA,
         logging.INFO: GREEN,
         logging.WARNING: YELLOW,
