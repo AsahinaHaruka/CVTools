@@ -5,13 +5,14 @@
 @Date : 2025/10/27 15:59
 """
 
-from typing import Iterable, List, Sequence, Tuple, Union, Optional
-import numpy as np
-import cv2
+from collections.abc import Iterable, Sequence
 
-PointLike = Union[Sequence[float], np.ndarray]
-Points4 = Union[Sequence[PointLike], np.ndarray]
-Size2i = Tuple[int, int]
+import cv2
+import numpy as np
+
+PointLike = Sequence[float] | np.ndarray
+Points4 = Sequence[PointLike] | np.ndarray
+Size2i = tuple[int, int]
 
 
 def _order_points(pts):
@@ -44,10 +45,10 @@ class PerspectiveTransformer:
     def __init__(
         self,
         points: Points4,
-        dst_size: Optional[Size2i] = None,
+        dst_size: Size2i | None = None,
         interpolation: int = cv2.INTER_LINEAR,
         border_mode: int = cv2.BORDER_CONSTANT,
-        border_value: Union[int, float, Tuple[int, int, int]] = 0,
+        border_value: float | tuple[int, int, int] = 0,
     ) -> None:
         """
         :param points: 4个点，可为`[(x, y), ...]`, `np.ndarray((4,2))`或`(4,1,2)`等形态。
@@ -67,7 +68,7 @@ class PerspectiveTransformer:
 
         self._update_transform(dst_size)
 
-    def _update_transform(self, dst_size: Optional[Size2i]) -> None:
+    def _update_transform(self, dst_size: Size2i | None) -> None:
         tl, tr, br, bl = self.src_rect
         widthA = _euclidean(br, bl)
         widthB = _euclidean(tr, tl)
@@ -75,8 +76,8 @@ class PerspectiveTransformer:
         heightB = _euclidean(tl, bl)
 
         if dst_size is None:
-            dst_w = int(round(max(widthA, widthB)))
-            dst_h = int(round(max(heightA, heightB)))
+            dst_w = round(max(widthA, widthB))
+            dst_h = round(max(heightA, heightB))
         else:
             dst_w = int(dst_size[0])
             dst_h = int(dst_size[1])
@@ -91,7 +92,7 @@ class PerspectiveTransformer:
         )
         self.M = cv2.getPerspectiveTransform(self.src_rect, self.dst_rect)
 
-    def __call__(self, images: Iterable[np.ndarray]) -> List[np.ndarray]:
+    def __call__(self, images: Iterable[np.ndarray]) -> list[np.ndarray]:
         """
         对images中每一张cv2图片进行透视变换。
         :return: 变换后的图片list。
@@ -111,7 +112,7 @@ class PerspectiveTransformer:
             for img in imgs
         ]
 
-    def update_points(self, points: Points4, dst_size: Optional[Size2i] = None) -> None:
+    def update_points(self, points: Points4, dst_size: Size2i | None = None) -> None:
         """
         更新4点并重算透视矩阵与输出尺寸。
         可同时传入新的`dst_size`，不传则沿用自动计算。

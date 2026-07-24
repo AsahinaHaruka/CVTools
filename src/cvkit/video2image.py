@@ -5,18 +5,19 @@
 @Date:     2025/8/16 16:45
 """
 
-import os
-import time
-import shutil
-import cv2
-import json
 import argparse
-import numpy as np
+import json
 import multiprocessing
+import os
+import shutil
+import time
+
+import cv2
+import numpy as np
 from tqdm import tqdm
 
-from cvkit.utils.perspective_transformation import PerspectiveTransformer
 from cvkit.utils.logger import LoggerBuilder
+from cvkit.utils.perspective_transformation import PerspectiveTransformer
 
 logger = LoggerBuilder().get_logger(name="data_split")
 
@@ -141,9 +142,8 @@ def extract_frames(
     if extract_fps <= 0:
         extract_fps = 1.0
 
-    interval = int(round(video_fps / extract_fps))
-    if interval < 1:
-        interval = 1
+    interval = round(video_fps / extract_fps)
+    interval = max(interval, 1)
 
     transformer = None
     if persp_cfg:
@@ -249,14 +249,13 @@ def process_videos(
     # 透视变换缓存逻辑
     points_cache = {}
     cache_path = os.path.join(output_dir, "points_cache.json")
-    if enable_perspective:
-        if os.path.exists(cache_path):
-            try:
-                with open(cache_path, "r", encoding="utf-8") as fr:
-                    points_cache = json.load(fr)
-            except Exception as e:
-                logger.warning(f"{e}\n⚠️ 读取透视点缓存失败，将创建新缓存。")
-                points_cache = {}
+    if enable_perspective and os.path.exists(cache_path):
+        try:
+            with open(cache_path, "r", encoding="utf-8") as fr:
+                points_cache = json.load(fr)
+        except FileNotFoundError:
+            logger.warning("⚠️ 读取透视点缓存失败，将创建新缓存。")
+            points_cache = {}
 
     tqdm_lock = multiprocessing.RLock()
     pool = multiprocessing.Pool(initializer=pool_init, initargs=(tqdm_lock,))
@@ -376,9 +375,8 @@ def main() -> None:
     if args.output_size:
         args.perspective = True
 
-    if os.name == "nt":
-        if any("\u4e00" <= ch <= "\u9fff" for ch in args.output):
-            logger.warning("⚠️ 警告：输出目录包含中文，建议使用英文路径\n")
+    if os.name == "nt" and any("\u4e00" <= ch <= "\u9fff" for ch in args.output):
+        logger.warning("⚠️ 警告：输出目录包含中文，建议使用英文路径\n")
 
     # 处理秒数到 fps 的换算
     final_fps = args.fps

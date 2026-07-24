@@ -5,9 +5,10 @@
 @Date : 2026/1/9 13:41
 """
 
+from typing import overload
+
 import cv2
 import numpy as np
-from typing import overload
 
 
 def zero2one(input_tensor: np.ndarray) -> np.ndarray:
@@ -148,14 +149,14 @@ class ImageProcessor:
         if self.is_fixed_size:
             # 强制适配到绝对尺寸 (Target H, Target W)
             r = min(self.target_h / shape[0], self.target_w / shape[1])  # 缩放比例
-            new_pad = int(round(shape[1] * r)), int(round(shape[0] * r))  # 缩放后的宽高
+            new_pad = round(shape[1] * r), round(shape[0] * r)  # 缩放后的宽高
             dw, dh = self.target_w - new_pad[0], self.target_h - new_pad[1]  # 填充量
 
         else:
             # 标准动态矩形,只把长边缩放到 long_side，短边自然缩放
             r = self.long_side / max(shape[0], shape[1])
 
-            new_pad = int(round(shape[1] * r)), int(round(shape[0] * r))
+            new_pad = round(shape[1] * r), round(shape[0] * r)
 
             # 计算动态 padding: 只需要补齐到 stride 的倍数
             dw = self.long_side - new_pad[0]
@@ -175,8 +176,8 @@ class ImageProcessor:
         if transformed_img.ndim == 2:
             transformed_img = transformed_img[..., None]
 
-        top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
-        left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
+        top, bottom = round(dh - 0.1), round(dh + 0.1)
+        left, right = round(dw - 0.1), round(dw + 0.1)
 
         h, w, c = transformed_img.shape
 
@@ -227,18 +228,18 @@ class ImageProcessor:
         # 1. 计算统一的变换参数 (只计算一次)
         if self.is_fixed_size:
             r = min(self.target_h / h_orig, self.target_w / w_orig)
-            new_w, new_h = int(round(w_orig * r)), int(round(h_orig * r))
+            new_w, new_h = round(w_orig * r), round(h_orig * r)
             dw, dh = self.target_w - new_w, self.target_h - new_h
         else:
             r = self.long_side / max(h_orig, w_orig)
-            new_w, new_h = int(round(w_orig * r)), int(round(h_orig * r))
+            new_w, new_h = round(w_orig * r), round(h_orig * r)
             dw, dh = self.long_side - new_w, self.long_side - new_h
             dw, dh = np.mod(dw, self.stride), np.mod(dh, self.stride)
 
         dw /= 2
         dh /= 2
-        top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
-        left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
+        top, bottom = round(dh - 0.1), round(dh + 0.1)
+        left, right = round(dw - 0.1), round(dw + 0.1)
 
         # 2. 批量 Resize (Vertical Stacking Trick)
         # 将 (B, H, W, C) -> (B*H, W, C) 变成一张长图
@@ -294,10 +295,9 @@ class ImageProcessor:
                 - list[dict]: 包含每张图像原始形状、缩放比例和填充量的字典列表，
                               用于后续的后处理（如坐标还原）。
         """
-        if isinstance(input_data, np.ndarray):
-            # (H, W) or (H, W, C) -> 单张图，包装成 list 或 扩展维度
-            if input_data.ndim == 2 or input_data.ndim == 3:
-                input_data = [input_data]
+        # (H, W) or (H, W, C) -> 单张图，包装成 list 或 扩展维度
+        if isinstance(input_data, np.ndarray) and (input_data.ndim == 2 or input_data.ndim == 3):
+            input_data = [input_data]
 
             # --- 2. 逻辑分支 ---
         if self.uniform_transform:
@@ -578,12 +578,11 @@ class ImageProcessor:
             if uniform_transform:
                 masks = np.array(masks)
         else:
-            raise ValueError("masks must be np.ndarray or list[np.ndarray]")
+            raise TypeError("masks must be np.ndarray or list[np.ndarray]")
 
         # 统一 boxes 维度 (B, N, 4)
-        if boxes is not None:
-            if isinstance(boxes, np.ndarray) and boxes.ndim == 2:
-                boxes = boxes[None, ...]
+        if boxes is not None and isinstance(boxes, np.ndarray) and boxes.ndim == 2:
+            boxes = boxes[None, ...]
             # 如果是 list，在 sequential 中处理
 
         if uniform_transform and isinstance(masks, np.ndarray):
@@ -666,10 +665,10 @@ class ImageProcessor:
         valid_h = mask_h - (mask_pad_h * 2)
         valid_w = mask_w - (mask_pad_w * 2)
 
-        x1 = max(0, int(round(mask_pad_w)))
-        y1 = max(0, int(round(mask_pad_h)))
-        x2 = min(mask_w, int(round(mask_pad_w + valid_w)))
-        y2 = min(mask_h, int(round(mask_pad_h + valid_h)))
+        x1 = max(0, round(mask_pad_w))
+        y1 = max(0, round(mask_pad_h))
+        x2 = min(mask_w, round(mask_pad_w + valid_w))
+        y2 = min(mask_h, round(mask_pad_h + valid_h))
 
         # 切片: (B, N, Valid_H, Valid_W)
         cropped_masks = masks[..., y1:y2, x1:x2]
@@ -801,10 +800,10 @@ class ImageProcessor:
             valid_h = mask_h - (mask_pad_h * 2)
             valid_w = mask_w - (mask_pad_w * 2)
 
-            x1 = max(0, int(round(mask_pad_w)))
-            y1 = max(0, int(round(mask_pad_h)))
-            x2 = min(mask_w, int(round(mask_pad_w + valid_w)))
-            y2 = min(mask_h, int(round(mask_pad_h + valid_h)))
+            x1 = max(0, round(mask_pad_w))
+            y1 = max(0, round(mask_pad_h))
+            x2 = min(mask_w, round(mask_pad_w + valid_w))
+            y2 = min(mask_h, round(mask_pad_h + valid_h))
 
             cropped_masks = mask_tensor[:, y1:y2, x1:x2]
 

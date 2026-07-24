@@ -6,10 +6,11 @@
 """
 
 import logging
-import cv2
-import time
 import threading
+import time
 from collections import deque
+
+import cv2
 import numpy as np
 
 RTSP_STREAM_TEMPLATES = {
@@ -170,9 +171,8 @@ class Video:
     def stop(self):
         """停止拉流"""
         self._running = False
-        if self._thread:
-            if self._thread.is_alive():
-                self._thread.join(timeout=3)
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=3)
 
     def __getitem__(self, item):
         with self._lock:

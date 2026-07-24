@@ -5,12 +5,14 @@
 @Date:     2025/8/22 08:58
 """
 
-from typing import overload, Literal
+from typing import Literal, overload
+
 import numpy as np
+
+from cvkit.utils.data_define import Area
 
 from .base_inference import ONNXInference
 from .image_processor import ImageProcessor
-from cvkit.utils.data_define import Area
 
 
 class YoloObjInference:
@@ -116,7 +118,7 @@ class AreaAvgInference(YoloObjInference):
         self,
         model_path: str,
         areas: list[Area],
-        area_class: list[int] = None,
+        area_class: list[int] | None = None,
         confidence: float = 0.5,
         class_num: int = 3,
         enable_trt_profile: bool = True,

@@ -5,13 +5,13 @@
 @Date : 2026/1/8 16:36
 """
 
+import logging
 import math
 import os
-from typing import Sequence
-import logging
+from collections.abc import Sequence
 
-import onnxruntime as ort
 import numpy as np
+import onnxruntime as ort
 from numpy import ndarray
 from onnxruntime import SparseTensor
 
@@ -259,7 +259,7 @@ class ONNXInference:
         return fixed_h, fixed_w, has_dynamic
 
     def _get_inference_size(
-        self, target_long: int, stride: int, input_wh: tuple[int, int] = None
+        self, target_long: int, stride: int, input_wh: tuple[int, int] | None = None
     ) -> tuple[int, int]:
         """
         统一计算推理尺寸，并强制执行 Stride 对齐检查。
@@ -295,8 +295,8 @@ class ONNXInference:
         new_w = int(math.ceil(raw_w / stride) * stride)
 
         # 计算预期的基础整数尺寸 (四舍五入)，用于和对齐后的尺寸对比
-        expected_h = int(round(raw_h))
-        expected_w = int(round(raw_w))
+        expected_h = round(raw_h)
+        expected_w = round(raw_w)
 
         if new_h != expected_h or new_w != expected_w:
             logger.warning(
@@ -416,12 +416,12 @@ class ONNXInference:
         try:
             if hasattr(self, "session"):
                 del self.session
-        except Exception:
+        except Exception:  # noqa: BLE001, S110
             pass
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         try:
             if hasattr(self, "session"):
                 del self.session
-        except Exception:
+        except Exception:  # noqa: BLE001, S110
             pass

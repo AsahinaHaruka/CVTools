@@ -7,15 +7,15 @@ FilePath: logger.py
 """
 
 import logging
-import os
-import sys
 import multiprocessing
 import multiprocessing.queues
+import os
+import sys
 from logging.handlers import (
-    RotatingFileHandler,
-    TimedRotatingFileHandler,
     QueueHandler,
     QueueListener,
+    RotatingFileHandler,
+    TimedRotatingFileHandler,
 )
 
 
@@ -33,7 +33,7 @@ class ColoredFormatter(logging.Formatter):
     RESET = "\x1b[0m"
 
     # 针对不同日志级别的颜色映射
-    FORMATS = {
+    FORMATS = {  # noqa: RUF012
         logging.DEBUG: MAGENTA,
         logging.INFO: GREEN,
         logging.WARNING: YELLOW,
@@ -228,7 +228,7 @@ class MultiProcessLogManager:
     def init_main_listener(
         level: int = logging.INFO,
         log_dir: str = "logs",
-        log_filename: str = None,
+        log_filename: str | None = None,
         console_output: bool = True,
         file_rotation: str = "size",  # 选项: 'size', 'time', 'none'
         max_bytes: int = 10 * 1024 * 1024,
@@ -348,7 +348,6 @@ class MultiProcessLogManager:
             调用此方法后，子进程中所有通过 `logging` 模块发出的日志都将
             通过队列发送到主进程进行处理，而不是直接输出到控制台或文件。
         """
-        global _GLOBAL_LOG_QUEUE
         target_queue = queue or _GLOBAL_LOG_QUEUE
         if target_queue is None:
             raise ValueError(
@@ -380,7 +379,6 @@ class MultiProcessLogManager:
         Raises:
             RuntimeError: 如果在调用 `configure_worker` 之前尝试获取日志队列。
         """
-        global _WORKER_LOG_QUEUE
         if _WORKER_LOG_QUEUE is None:
             raise RuntimeError("日志队列未初始化！请先调用 configure_worker。")
         return _WORKER_LOG_QUEUE

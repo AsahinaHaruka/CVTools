@@ -6,7 +6,6 @@
 """
 
 from dataclasses import dataclass, field
-from typing import Tuple
 
 
 # ----------------- 类型定义 -----------------
@@ -23,7 +22,7 @@ class Area:
         表示一个矩形区域的左上角与右下角坐标。
     """
 
-    area: Tuple = field(repr=False)  # 隐藏原始入参
+    area: tuple = field(repr=False)  # 隐藏原始入参
 
     # 标准化后的坐标
     start_x: int = field(init=False)

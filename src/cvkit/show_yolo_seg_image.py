@@ -7,12 +7,12 @@
 
 import argparse
 import os
+
 import cv2
 import numpy as np
 from tqdm import tqdm
+
 from cvkit.inference.yolo_inference import YoloSegInference
-
-
 from cvkit.utils.logger import LoggerBuilder
 
 logger = LoggerBuilder().get_logger(name="yolo_seg")

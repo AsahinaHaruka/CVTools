@@ -134,7 +134,7 @@ def sample_files_from_directories(
         if remainder > 0:
             # 找出还有剩余图片没被抽完的文件夹
             available_dirs = [
-                d for d in dir_counts.keys() if allocations[d] < dir_counts[d]
+                d for d in dir_counts if allocations[d] < dir_counts[d]
             ]
             while remainder > 0 and available_dirs:
                 lucky_dir = random.choice(available_dirs)

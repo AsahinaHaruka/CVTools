@@ -5,11 +5,12 @@
 @Date:     2025/12/11 16:43
 """
 
+import argparse
 import os
 import random
-from tqdm import tqdm
 import shutil
-import argparse
+
+from tqdm import tqdm
 
 from cvkit.utils.logger import LoggerBuilder
 

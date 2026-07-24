@@ -7,12 +7,12 @@
 
 import argparse
 import sys
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable, List
-from tqdm import tqdm
-import numpy as np
 
 import cv2
+import numpy as np
+from tqdm import tqdm
 
 from cvkit.utils.logger import LoggerBuilder
 
@@ -34,7 +34,7 @@ def is_subpath(child: Path, parent: Path) -> bool:
     try:
         child.resolve().relative_to(parent.resolve())
         return True
-    except Exception:
+    except ValueError:
         return False
 
 
@@ -88,7 +88,7 @@ def to_gray(in_path: Path, out_path: Path, overwrite: bool) -> bool:
         if not ok:
             raise ValueError("保存失败")
         return True
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logger.error(f"[错误] 转换失败: {in_path} -> {out_path} ({e})")
         return False
 
@@ -110,7 +110,7 @@ def main() -> None:
 
     dst.mkdir(parents=True, exist_ok=True)
 
-    files: List[Path] = list(list_images(src, args.recursive))
+    files: list[Path] = list(list_images(src, args.recursive))
     if not files:
         logger.warning("[提示] 未找到待处理的图片文件。")
         return

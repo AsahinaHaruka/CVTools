@@ -23,7 +23,7 @@ class SAM3Inference:
         min_batch_size: int = 1,
         opt_batch_size: int = 1,
         max_batch_size: int = 1,
-        input_image_size: tuple[int, int] = None,
+        input_image_size: tuple[int, int] | None = None,
         target_long_side: int = 640,
         other_size=(32, 32, 32),
         execution_provider: tuple[str] = ("trt", "cuda", "CoreML", "cpu"),

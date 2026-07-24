@@ -5,13 +5,14 @@
 @Date:     2025/12/10 08:29
 """
 
-import os
 import argparse
+import os
+
 import cv2
 import numpy as np
-from cvkit.inference.yolo_inference import YoloObjInference
 from tqdm import tqdm
 
+from cvkit.inference.yolo_inference import YoloObjInference
 from cvkit.utils.logger import LoggerBuilder
 
 logger = LoggerBuilder().get_logger(name="data_split")
