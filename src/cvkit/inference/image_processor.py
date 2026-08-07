@@ -296,7 +296,9 @@ class ImageProcessor:
                               用于后续的后处理（如坐标还原）。
         """
         # (H, W) or (H, W, C) -> 单张图，包装成 list 或 扩展维度
-        if isinstance(input_data, np.ndarray) and (input_data.ndim == 2 or input_data.ndim == 3):
+        if isinstance(input_data, np.ndarray) and (
+            input_data.ndim == 2 or input_data.ndim == 3
+        ):
             input_data = [input_data]
 
             # --- 2. 逻辑分支 ---

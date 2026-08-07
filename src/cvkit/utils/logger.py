@@ -27,6 +27,7 @@ class ColoredFormatter(logging.Formatter):
 
     # ANSI 颜色代码
     MAGENTA = "\x1b[35;20m"
+    GREY = "\x1b[38;20m"
     GREEN = "\x1b[32;20m"
     YELLOW = "\x1b[33;20m"
     RED = "\x1b[31;20m"
@@ -34,7 +35,7 @@ class ColoredFormatter(logging.Formatter):
     RESET = "\x1b[0m"
 
     # 针对不同日志级别的颜色映射
-    FORMATS:ClassVar[dict] = {
+    FORMATS: ClassVar[dict] = {
         logging.DEBUG: MAGENTA,
         logging.INFO: GREEN,
         logging.WARNING: YELLOW,
@@ -63,7 +64,7 @@ class ColoredFormatter(logging.Formatter):
             str: 带有颜色编码的格式化日志字符串。
         """
         # 1. 获取当前级别的颜色
-        log_fmt = self.FORMATS.get(record.levelno)
+        log_fmt = self.FORMATS.get(record.levelno, self.GREY)
 
         original_fmt = self._fmt
 
@@ -79,10 +80,8 @@ class LoggerBuilder:
     负责具体的 Handler 创建和 Formatter 配置
     """
 
-    DEBUG_FORMAT = "%(asctime)s | %(levelname)-8s | %(processName)s:%(process)d | %(filename)s:%(lineno)d | %(message)s"
-    DEFAULT_FORMAT = (
-        "%(asctime)s | %(levelname)-8s | %(processName)s:%(process)d | %(message)s"
-    )
+    DEBUG_FORMAT = "%(asctime)s | %(levelname)-8s | %(processName)s:%(process)d | %(name)s | %(filename)s:%(lineno)d | %(message)s"
+    DEFAULT_FORMAT = "%(asctime)s | %(levelname)-8s | %(processName)s:%(process)d | %(name)s | %(message)s"
 
     @staticmethod
     def _create_handlers(
@@ -145,7 +144,7 @@ class LoggerBuilder:
     @staticmethod
     def get_logger(
         name: str = "root",
-        level: int = logging.NOTSET,
+        level: int | str = logging.NOTSET,
         log_dir: str = "logs",
         log_filename: str | None = None,
         console_output: bool = True,
@@ -181,14 +180,10 @@ class LoggerBuilder:
         Raises:
             OSError: 如果无法创建日志目录或写入日志文件。
         """
-        root_logger = logging.getLogger()
-
         logger = logging.getLogger(name)
         logger.setLevel(level)
 
-        effective_level = (
-            level if level != logging.NOTSET else root_logger.getEffectiveLevel()
-        )
+        effective_level = logger.getEffectiveLevel()
         if effective_level == logging.DEBUG:
             format = LoggerBuilder.DEBUG_FORMAT
         else:
@@ -227,7 +222,7 @@ class MultiProcessLogManager:
 
     @staticmethod
     def init_main_listener(
-        level: int = logging.INFO,
+        level: int | str = logging.INFO,
         log_dir: str = "logs",
         log_filename: str | None = None,
         console_output: bool = True,
@@ -284,7 +279,8 @@ class MultiProcessLogManager:
 
         root = logging.getLogger()
         root.setLevel(level)
-        if level == logging.DEBUG:
+
+        if root.getEffectiveLevel() == logging.DEBUG:
             _format = LoggerBuilder.DEBUG_FORMAT
         else:
             _format = LoggerBuilder.DEFAULT_FORMAT
@@ -327,7 +323,8 @@ class MultiProcessLogManager:
 
     @staticmethod
     def configure_worker(
-        queue: multiprocessing.queues.Queue | None = None, level: int = logging.INFO
+        queue: multiprocessing.queues.Queue | None = None,
+        level: int | str = logging.INFO,
     ) -> None:
         """
         【子进程调用】配置当前进程的日志发送端。
